@@ -4,7 +4,7 @@ library(tidyverse)
 library(tidymodels)
 #install.packages('DataExplorer')
 #install.packages("poissonreg")
-library(poissonreg)
+# library(poissonreg)
 # install.packages("glmnet")
 library(glmnet)
 library(patchwork)
@@ -20,14 +20,13 @@ library(parsnip)
 install.packages('embed')
 library(embed)
 
+# rm(list=ls()) use to erase environment
+
 ## 112 Cols
 
-data_train <- vroom("train.csv") # grab training data
+data_train <- vroom("train.csv") %>%
+  mutate(ACTION=factor(ACTION))# grab training data
 
-factor_cols <- c(1:10)
-
-data_train <- data_train %>%
-  mutate(across(factor_cols, as.factor)) # convert factor variables
 
 data_train
 
@@ -59,15 +58,96 @@ rFormula <- ACTION ~ .
 
 my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-  step_other(c(RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2,
-               ROLE_DEPTNAME, ROLE_TITLE, ROLE_FAMILY_DESC,
-               ROLE_FAMILY, ROLE_CODE), threshold = .01) %>% # get hours
+  step_other(all_nominal_predictors(), threshold = .01) %>% # get hours
   step_dummy(all_nominal_predictors()) # get dummy variables
 
 prepped_recipe <- prep(my_recipe) # preprocessing new data
 baked_data1 <- bake(prepped_recipe, new_data = data_train)
 
-ncol(baked_data1)
+# ncol(baked_data1)
+
+
+##################################################
+##### Logistic Regression: Bin Cross Entropy #####
+##################################################
+
+log_reg <- logistic_reg() %>% #Type of model
+  set_engine("glm")
+
+amazon_workflow <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(log_reg) %>%
+  fit(data = data_train) # Fit the workflow
+
+data_test <- vroom("test.csv") # grab testing data
+
+amazon_predictions <- predict(amazon_workflow,
+                         new_data=data_test,
+                         type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "amazon_pred_logreg.csv", delim = ",")
+save(file = 'amazon_wf.RData', list = c('amazon_workflow'))
+load('amazon_wf.RData')
+
+
+################################################
+##### Logistic Regression: target encoding #####
+################################################
+
+rFormula <- ACTION ~ .
+
+my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+  step_other(all_nominal_predictors(), threshold = .001) %>%
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))# get hours
+  
+
+prepped_recipe <- prep(my_recipe) # preprocessing new data
+baked_data1 <- bake(prepped_recipe, new_data = data_train)
+
+log_reg <- logistic_reg(mixture = tune(), penalty = tune()) %>% #Type of model
+  set_engine("glmnet")
+
+pretune_workflow <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(log_reg)
+
+# Grid for CV
+tuning_grid <- grid_regular(penalty(),
+                            mixture(),
+                            levels = 5) ## L^2 tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- pretune_workflow %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- pretune_workflow %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "amazon_logreg_target.csv", delim = ",")
+save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+load('amazon_penalized_wf.RData')
 
 
 
