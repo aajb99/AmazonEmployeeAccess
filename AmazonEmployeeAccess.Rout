@@ -45,9 +45,83 @@ Type 'q()' to quit R.
 ✖ dplyr::lag()      masks stats::lag()
 ✖ yardstick::spec() masks readr::spec()
 ✖ recipes::step()   masks stats::step()
-• Learn how to get started at https://www.tidymodels.org/start/
+• Use tidymodels_prefer() to resolve common conflicts.
 > #install.packages('DataExplorer')
 > #install.packages("poissonreg")
-> library(poissonreg)
-Error in library(poissonreg) : there is no package called ‘poissonreg’
+> # library(poissonreg)
+> # install.packages("glmnet")
+> library(glmnet)
+Loading required package: Matrix
+
+Attaching package: ‘Matrix’
+
+The following objects are masked from ‘package:tidyr’:
+
+    expand, pack, unpack
+
+Loaded glmnet 4.1-8
+> library(patchwork)
+> # install.packages("rpart")
+> # install.packages('ranger')
+> library(ranger)
+> #install.packages('stacks')
+> library(stacks)
+> library(vroom)
+
+Attaching package: ‘vroom’
+
+The following object is masked from ‘package:yardstick’:
+
+    spec
+
+The following object is masked from ‘package:scales’:
+
+    col_factor
+
+The following objects are masked from ‘package:readr’:
+
+    as.col_spec, col_character, col_date, col_datetime, col_double,
+    col_factor, col_guess, col_integer, col_logical, col_number,
+    col_skip, col_time, cols, cols_condense, cols_only, date_names,
+    date_names_lang, date_names_langs, default_locale, fwf_cols,
+    fwf_empty, fwf_positions, fwf_widths, locale, output_column,
+    problems, spec
+
+> library(parsnip)
+> # install.packages('dbarts')
+> # library(dbarts)
+> install.packages('embed')
+Installing package into ‘/home/abrown52/R/x86_64-pc-linux-gnu-library/4.3’
+(as ‘lib’ is unspecified)
+trying URL 'https://cloud.r-project.org/src/contrib/embed_1.1.2.tar.gz'
+Content type 'application/x-gzip' length 180798 bytes (176 KB)
+==================================================
+downloaded 176 KB
+
+* installing *source* package ‘embed’ ...
+** package ‘embed’ successfully unpacked and MD5 sums checked
+** using staged installation
+** R
+** data
+** byte-compile and prepare package for lazy loading
+** help
+*** installing help indices
+*** copying figures
+** building package indices
+** testing if installed package can be loaded from temporary location
+** testing if installed package can be loaded from final location
+** testing if installed package keeps a record of temporary installation path
+* DONE (embed)
+
+The downloaded source packages are in
+	‘/tmp/RtmpuKOsaR/downloaded_packages’
+> library(embed)
+> 
+> # rm(list=ls()) use to erase environment
+> 
+> ## 112 Cols
+> 
+> data_train <- vroom("train.csv") %>%
++   mutate(ACTION=factor(ACTION))# grab training data
+Error: 'train.csv' does not exist in current working directory ('/home/abrown52/STAT348/AmazonEmployeeAccess').
 Execution halted
