@@ -26,7 +26,7 @@ library(embed)
 
 ## 112 Cols
 
-data_train <- vroom("train.csv") %>%
+data_train <- vroom("./data/train.csv") %>%
   mutate(ACTION=factor(ACTION))# grab training data
 
 
