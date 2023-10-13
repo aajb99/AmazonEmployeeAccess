@@ -81,7 +81,7 @@ amazon_workflow <- workflow() %>%
   add_model(log_reg) %>%
   fit(data = data_train) # Fit the workflow
 
-data_test <- vroom("test.csv") # grab testing data
+data_test <- vroom("./data/test.csv") # grab testing data
 
 amazon_predictions <- predict(amazon_workflow,
                          new_data=data_test,
