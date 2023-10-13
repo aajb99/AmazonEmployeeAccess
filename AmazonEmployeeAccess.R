@@ -1,25 +1,25 @@
-install.packages('tidyverse')
+#install.packages('tidyverse')
 library(tidyverse)
-install.packages('tidymodels')
+#install.packages('tidymodels')
 library(tidymodels)
 #install.packages('DataExplorer')
 #install.packages("poissonreg")
 # library(poissonreg)
-install.packages("glmnet")
+#install.packages("glmnet")
 library(glmnet)
 #library(patchwork)
 # install.packages("rpart")
-install.packages('ranger')
+#install.packages('ranger')
 library(ranger)
-install.packages('stacks')
+#install.packages('stacks')
 library(stacks)
-install.packages('vroom')
+#install.packages('vroom')
 library(vroom)
-install.packages('parsnip')
+#install.packages('parsnip')
 library(parsnip)
 # install.packages('dbarts')
 # library(dbarts)
-install.packages('embed')
+#install.packages('embed')
 library(embed)
 
 # rm(list=ls()) use to erase environment
@@ -138,7 +138,7 @@ final_wf <- pretune_workflow %>%
   finalize_workflow(bestTune) %>%
   fit(data = data_train)
 
-data_test <- vroom("test.csv") # grab testing data
+data_test <- vroom("./data/test.csv") # grab testing data
 
 amazon_predictions <- predict(final_wf,
                               new_data=data_test,
