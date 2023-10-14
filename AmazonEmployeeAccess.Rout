@@ -45,7 +45,7 @@ Type 'q()' to quit R.
 ✖ dplyr::lag()      masks stats::lag()
 ✖ yardstick::spec() masks readr::spec()
 ✖ recipes::step()   masks stats::step()
-• Search for functions across packages at https://www.tidymodels.org/find/
+• Use suppressPackageStartupMessages() to eliminate package startup messages
 > #install.packages('DataExplorer')
 > #install.packages("poissonreg")
 > # library(poissonreg)
@@ -177,6 +177,96 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 +   add_model(log_reg) %>%
 +   fit(data = data_train) # Fit the workflow
 > 
-> data_test <- vroom("test.csv") # grab testing data
-Error: 'test.csv' does not exist in current working directory ('/home/abrown52/STAT348/AmazonEmployeeAccess').
-Execution halted
+> data_test <- vroom("./data/test.csv") # grab testing data
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> amazon_predictions <- predict(amazon_workflow,
++                          new_data=data_test,
++                          type="prob") %>% # "class" or "prob"
++   mutate(Id = data_test$id) %>%
++   mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
++   select(-.pred_0, -.pred_1)
+Warning message:
+In predict.lm(object, newdata, se.fit, scale = 1, type = if (type ==  :
+  prediction from rank-deficient fit; attr(*, "non-estim") has doubtful cases
+> 
+> vroom_write(amazon_predictions, "amazon_pred_logreg.csv", delim = ",")
+> save(file = 'amazon_wf.RData', list = c('amazon_workflow'))
+> load('amazon_wf.RData')
+> 
+> 
+> ################################################
+> ##### Logistic Regression: target encoding #####
+> ################################################
+> 
+> rFormula <- ACTION ~ .
+> 
+> my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
++   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
++   step_other(all_nominal_predictors(), threshold = .001) %>%
++   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))# get hours
+>   
+> 
+> prepped_recipe <- prep(my_recipe) # preprocessing new data
+> baked_data1 <- bake(prepped_recipe, new_data = data_train)
+> 
+> log_reg <- logistic_reg(mixture = tune(), penalty = tune()) %>% #Type of model
++   set_engine("glmnet")
+> 
+> pretune_workflow <- workflow() %>%
++   add_recipe(my_recipe) %>%
++   add_model(log_reg)
+> 
+> # Grid for CV
+> tuning_grid <- grid_regular(penalty(),
++                             mixture(),
++                             levels = 5) ## L^2 tuning possibilities
+> 
+> # Split data for CV
+> folds <- vfold_cv(data_train, v = 10, repeats = 1)
+> 
+> # Run CV
+> CV_results <- pretune_workflow %>%
++   tune_grid(resamples = folds,
++             grid = tuning_grid,
++             metrics = metric_set(roc_auc))
+> 
+> bestTune <- CV_results %>%
++   select_best('roc_auc')
+> 
+> final_wf <- pretune_workflow %>%
++   finalize_workflow(bestTune) %>%
++   fit(data = data_train)
+> 
+> data_test <- vroom("./data/test.csv") # grab testing data
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> amazon_predictions <- predict(final_wf,
++                               new_data=data_test,
++                               type="prob") %>% # "class" or "prob"
++   mutate(Id = data_test$id) %>%
++   mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
++   select(-.pred_0, -.pred_1)
+> 
+> vroom_write(amazon_predictions, "amazon_logreg_target.csv", delim = ",")
+> save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+> load('amazon_penalized_wf.RData')
+> 
+> 
+> 
+> 
+> proc.time()
+   user  system elapsed 
+565.796   3.772 270.525 
