@@ -37,19 +37,19 @@ data_train
 ##### EDA #####
 ###############
 
-library(ggplot2)
-
-boxplot(data_train$ROLE_CODE ~ data_train$ACTION,
-        col='steelblue',
-        main='action by role code',
-        xlab='Action',
-        ylab='ROLE_CODE')
-
-boxplot(data_train$ROLE_TITLE ~ data_train$ACTION,
-        col='steelblue',
-        main='action by role title',
-        xlab='Action',
-        ylab='ROLE_TITLE')
+# library(ggplot2)
+# 
+# boxplot(data_train$ROLE_CODE ~ data_train$ACTION,
+#         col='steelblue',
+#         main='action by role code',
+#         xlab='Action',
+#         ylab='ROLE_CODE')
+# 
+# boxplot(data_train$ROLE_TITLE ~ data_train$ACTION,
+#         col='steelblue',
+#         main='action by role title',
+#         xlab='Action',
+#         ylab='ROLE_TITLE')
 
 
 #######################
@@ -58,10 +58,20 @@ boxplot(data_train$ROLE_TITLE ~ data_train$ACTION,
 
 rFormula <- ACTION ~ .
 
+# my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
+#   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+#   step_other(all_nominal_predictors(), threshold = .01) %>% # get hours
+#   step_dummy(all_nominal_predictors()) # get dummy variables
+# 
+# prepped_recipe <- prep(my_recipe) # preprocessing new data
+# baked_data1 <- bake(prepped_recipe, new_data = data_train)
+
+### For target encoding/Random Forests: ###
+
 my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-  step_other(all_nominal_predictors(), threshold = .01) %>% # get hours
-  step_dummy(all_nominal_predictors()) # get dummy variables
+  step_other(all_nominal_predictors(), threshold = .001) %>%
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))# get hours
 
 prepped_recipe <- prep(my_recipe) # preprocessing new data
 baked_data1 <- bake(prepped_recipe, new_data = data_train)
@@ -150,6 +160,61 @@ amazon_predictions <- predict(final_wf,
 vroom_write(amazon_predictions, "amazon_logreg_target.csv", delim = ",")
 save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
 load('amazon_penalized_wf.RData')
+
+
+
+########################################
+##### Classification Random Forest #####
+########################################
+
+class_rf_mod <- rand_forest(mtry = tune(), 
+                            min_n = tune(),
+                            trees = 800) %>% #Type of model
+  set_engine('ranger') %>%
+  set_mode('classification')
+
+pretune_workflow <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(class_rf_mod)
+
+## Grid of values to tune over
+tuning_grid <- grid_regular(mtry(range = c(1,ncol(data_train)-1)),
+                            min_n(),
+                            levels = 3) ## L^2 total tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- pretune_workflow %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- pretune_workflow %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("./data/test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "amazon_pred_rf.csv", delim = ",")
+save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+load('amazon_penalized_wf.RData')
+
+
+
+
+
 
 
 
