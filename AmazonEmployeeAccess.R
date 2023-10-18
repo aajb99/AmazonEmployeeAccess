@@ -204,7 +204,8 @@ amazon_predictions <- predict(final_wf,
                               new_data=data_test,
                               type="prob") %>% # "class" or "prob"
   mutate(Id = data_test$id) %>%
-  mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  mutate(ACTION = .pred_1) %>%
   select(-.pred_0, -.pred_1)
 
 vroom_write(amazon_predictions, "amazon_pred_rf.csv", delim = ",")
@@ -213,7 +214,57 @@ load('amazon_penalized_wf.RData')
 
 
 
+################################
+##### Naive Bayes Approach #####
+################################
 
+install.packages('discrim')
+library(discrim)
+install.packages('naivebayes')
+library(naivebayes)
+
+# nb model
+nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
+                        set_mode('classification') %>%
+                        set_engine('naivebayes')
+
+nb_wf <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(nb_mod)
+
+tuning_grid <- grid_regular(Laplace(),
+                            smoothness(),
+                            levels = 5) ## L^2 total tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- nb_wf %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- nb_wf %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("./data/test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  mutate(ACTION = .pred_1) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "amazon_pred_nb.csv", delim = ",")
+save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+load('amazon_penalized_wf.RData')
 
 
 
