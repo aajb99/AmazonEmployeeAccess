@@ -384,9 +384,72 @@ amazon_predictions <- predict(final_wf,
   mutate(ACTION = .pred_1) %>%
   select(-.pred_0, -.pred_1)
 
-vroom_write(amazon_predictions, "amazon_nb_dim_red.csv", delim = ",")
+vroom_write(amazon_predictions, "./data/amazon_nb_dim_red.csv", delim = ",")
 save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
 load('amazon_penalized_wf.RData')
+
+
+##################################
+##### KNN Comp Dim Reduction #####
+##################################
+
+install.packages('kknn')
+library(kknn)
+
+my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+  step_other(all_nominal_predictors(), threshold = .001) %>%
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
+
+prepped_recipe <- prep(my_recipe) # preprocessing new data
+baked_data1 <- bake(prepped_recipe, new_data = data_train)
+
+## knn model
+knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
+  set_mode("classification") %>%
+  set_engine("kknn")
+
+knn_wf <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(knn_model)
+
+## Fit or Tune Model
+tuning_grid <- grid_regular(neighbors(),
+                            levels = 5) ## L^2 total tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- knn_wf %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- knn_wf %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("./data/test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  mutate(ACTION = .pred_1) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "./data/amazon_knn_dim_red.csv", delim = ",")
+
+
+
+
 
 
 
