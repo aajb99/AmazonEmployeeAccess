@@ -17,6 +17,8 @@ Type 'demo()' for some demos, 'help()' for on-line help, or
 'help.start()' for an HTML browser interface to help.
 Type 'q()' to quit R.
 
+[Previously saved workspace restored]
+
 > #install.packages('tidyverse')
 > library(tidyverse)
 ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
@@ -133,19 +135,19 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > ##### EDA #####
 > ###############
 > 
-> library(ggplot2)
-> 
-> boxplot(data_train$ROLE_CODE ~ data_train$ACTION,
-+         col='steelblue',
-+         main='action by role code',
-+         xlab='Action',
-+         ylab='ROLE_CODE')
-> 
-> boxplot(data_train$ROLE_TITLE ~ data_train$ACTION,
-+         col='steelblue',
-+         main='action by role title',
-+         xlab='Action',
-+         ylab='ROLE_TITLE')
+> # library(ggplot2)
+> # 
+> # boxplot(data_train$ROLE_CODE ~ data_train$ACTION,
+> #         col='steelblue',
+> #         main='action by role code',
+> #         xlab='Action',
+> #         ylab='ROLE_CODE')
+> # 
+> # boxplot(data_train$ROLE_TITLE ~ data_train$ACTION,
+> #         col='steelblue',
+> #         main='action by role title',
+> #         xlab='Action',
+> #         ylab='ROLE_TITLE')
 > 
 > 
 > #######################
@@ -154,10 +156,20 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > 
 > rFormula <- ACTION ~ .
 > 
+> # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
+> #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+> #   step_other(all_nominal_predictors(), threshold = .01) %>% # get hours
+> #   step_dummy(all_nominal_predictors()) # get dummy variables
+> # 
+> # prepped_recipe <- prep(my_recipe) # preprocessing new data
+> # baked_data1 <- bake(prepped_recipe, new_data = data_train)
+> 
+> ### For target encoding/Random Forests: ###
+> 
 > my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
 +   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-+   step_other(all_nominal_predictors(), threshold = .01) %>% # get hours
-+   step_dummy(all_nominal_predictors()) # get dummy variables
++   step_other(all_nominal_predictors(), threshold = .001) %>%
++   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))# get hours
 > 
 > prepped_recipe <- prep(my_recipe) # preprocessing new data
 > baked_data1 <- bake(prepped_recipe, new_data = data_train)
@@ -192,9 +204,6 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 +   mutate(Id = data_test$id) %>%
 +   mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
 +   select(-.pred_0, -.pred_1)
-Warning message:
-In predict.lm(object, newdata, se.fit, scale = 1, type = if (type ==  :
-  prediction from rank-deficient fit; attr(*, "non-estim") has doubtful cases
 > 
 > vroom_write(amazon_predictions, "amazon_pred_logreg.csv", delim = ",")
 > save(file = 'amazon_wf.RData', list = c('amazon_workflow'))
@@ -236,37 +245,4 @@ In predict.lm(object, newdata, se.fit, scale = 1, type = if (type ==  :
 +   tune_grid(resamples = folds,
 +             grid = tuning_grid,
 +             metrics = metric_set(roc_auc))
-> 
-> bestTune <- CV_results %>%
-+   select_best('roc_auc')
-> 
-> final_wf <- pretune_workflow %>%
-+   finalize_workflow(bestTune) %>%
-+   fit(data = data_train)
-> 
-> data_test <- vroom("./data/test.csv") # grab testing data
-Rows: 58921 Columns: 10
-── Column specification ────────────────────────────────────────────────────────
-Delimiter: ","
-dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-> 
-> amazon_predictions <- predict(final_wf,
-+                               new_data=data_test,
-+                               type="prob") %>% # "class" or "prob"
-+   mutate(Id = data_test$id) %>%
-+   mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-+   select(-.pred_0, -.pred_1)
-> 
-> vroom_write(amazon_predictions, "amazon_logreg_target.csv", delim = ",")
-> save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-> load('amazon_penalized_wf.RData')
-> 
-> 
-> 
-> 
-> proc.time()
-   user  system elapsed 
-565.796   3.772 270.525 
+Terminated
