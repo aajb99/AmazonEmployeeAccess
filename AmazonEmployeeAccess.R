@@ -477,7 +477,7 @@ svmLinear <- svm_linear(cost=tune()) %>% # set or tune
 
 svm_wf <- workflow() %>%
   add_recipe(my_recipe) %>%
-  add_model(svmPoly)
+  add_model(svmRadial)
 
 ## Fit or Tune Model
 tuning_grid <- grid_regular(rbf_sigma(),
