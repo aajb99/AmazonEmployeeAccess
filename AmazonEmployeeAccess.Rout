@@ -573,7 +573,7 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > 
 > svm_wf <- workflow() %>%
 +   add_recipe(my_recipe) %>%
-+   add_model(svmPoly)
++   add_model(svmRadial)
 > 
 > ## Fit or Tune Model
 > tuning_grid <- grid_regular(rbf_sigma(),
@@ -588,14 +588,49 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 +   tune_grid(resamples = folds,
 +             grid = tuning_grid,
 +             metrics = metric_set(roc_auc))
-Error in `check_grid()`:
-! The provided `grid` has the following parameter columns that have not been marked for tuning by `tune()`: 'rbf_sigma'.
-Backtrace:
-    ▆
- 1. ├─svm_wf %>% ...
- 2. ├─tune::tune_grid(., resamples = folds, grid = tuning_grid, metrics = metric_set(roc_auc))
- 3. └─tune:::tune_grid.workflow(...)
- 4.   └─tune:::tune_grid_workflow(...)
- 5.     └─tune:::check_grid(grid = grid, workflow = workflow, pset = pset)
- 6.       └─rlang::abort(msg)
-Execution halted
+> 
+> bestTune <- CV_results %>%
++   select_best('roc_auc')
+> 
+> final_wf <- svm_wf %>%
++   finalize_workflow(bestTune) %>%
++   fit(data = data_train)
+maximum number of iterations reached 0.0257414 -0.02500495> 
+> data_test <- vroom("./data/test.csv") # grab testing data
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> amazon_predictions <- predict(final_wf,
++                               new_data=data_test,
++                               type="prob") %>% # "class" or "prob"
++   mutate(Id = data_test$id) %>%
++   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
++   mutate(ACTION = .pred_1) %>%
++   select(-.pred_0, -.pred_1)
+> 
+> vroom_write(amazon_predictions, "./data/amazon_svm_pred.csv", delim = ",")
+> 
+> save(file = 'amazon_svm_wf.RData', list = c('final_wf'))
+> load('amazon_svm_wf.RData')
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> proc.time()
+    user   system  elapsed 
+3738.865  146.821 1831.821 
