@@ -17,6 +17,8 @@ Type 'demo()' for some demos, 'help()' for on-line help, or
 'help.start()' for an HTML browser interface to help.
 Type 'q()' to quit R.
 
+[Previously saved workspace restored]
+
 > #install.packages('tidyverse')
 > library(tidyverse)
 ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
@@ -45,7 +47,7 @@ Type 'q()' to quit R.
 ✖ dplyr::lag()      masks stats::lag()
 ✖ yardstick::spec() masks readr::spec()
 ✖ recipes::step()   masks stats::step()
-• Learn how to get started at https://www.tidymodels.org/start/
+• Use suppressPackageStartupMessages() to eliminate package startup messages
 > #install.packages('DataExplorer')
 > #install.packages("poissonreg")
 > # library(poissonreg)
@@ -588,49 +590,3 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 +   tune_grid(resamples = folds,
 +             grid = tuning_grid,
 +             metrics = metric_set(roc_auc))
-> 
-> bestTune <- CV_results %>%
-+   select_best('roc_auc')
-> 
-> final_wf <- svm_wf %>%
-+   finalize_workflow(bestTune) %>%
-+   fit(data = data_train)
-maximum number of iterations reached 0.0257414 -0.02500495> 
-> data_test <- vroom("./data/test.csv") # grab testing data
-Rows: 58921 Columns: 10
-── Column specification ────────────────────────────────────────────────────────
-Delimiter: ","
-dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-> 
-> amazon_predictions <- predict(final_wf,
-+                               new_data=data_test,
-+                               type="prob") %>% # "class" or "prob"
-+   mutate(Id = data_test$id) %>%
-+   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-+   mutate(ACTION = .pred_1) %>%
-+   select(-.pred_0, -.pred_1)
-> 
-> vroom_write(amazon_predictions, "./data/amazon_svm_pred.csv", delim = ",")
-> 
-> save(file = 'amazon_svm_wf.RData', list = c('final_wf'))
-> load('amazon_svm_wf.RData')
-> 
-> 
-> 
-> 
-> 
-> 
-> 
-> 
-> 
-> 
-> 
-> 
-> 
-> 
-> proc.time()
-    user   system  elapsed 
-3738.865  146.821 1831.821 
