@@ -21,6 +21,7 @@ library(parsnip)
 # library(dbarts)
 #install.packages('embed')
 library(embed)
+library(themis)
 
 # rm(list=ls()) use to erase environment
 
@@ -30,7 +31,7 @@ data_train <- vroom("./data/train.csv") %>%
   mutate(ACTION=factor(ACTION))# grab training data
 
 
-data_train
+#data_train
 
 
 ###############
@@ -66,15 +67,15 @@ rFormula <- ACTION ~ .
 # prepped_recipe <- prep(my_recipe) # preprocessing new data
 # baked_data1 <- bake(prepped_recipe, new_data = data_train)
 
-### For target encoding/Random Forests: ###
-
-# my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
-#   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-#   step_other(all_nominal_predictors(), threshold = .001) %>%
-#   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))# get hours
-# 
-# prepped_recipe <- prep(my_recipe) # preprocessing new data
-# baked_data1 <- bake(prepped_recipe, new_data = data_train)
+## For target encoding/Random Forests: ###
+my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+  #step_other(all_nominal_predictors(), threshold = .001) %>%
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
+  step_smote(all_outcomes(), neighbors = 5)
+ 
+prepped_recipe <- prep(my_recipe) # preprocessing new data
+baked_data1 <- bake(prepped_recipe, new_data = data_train)
 
 # ncol(baked_data1)
 
@@ -109,57 +110,54 @@ rFormula <- ACTION ~ .
 ##### Logistic Regression: target encoding #####
 ################################################
 
-# rFormula <- ACTION ~ .
-# 
 # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
 #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
 #   step_other(all_nominal_predictors(), threshold = .001) %>%
 #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))# get hours
-#   
-# 
+
 # prepped_recipe <- prep(my_recipe) # preprocessing new data
 # baked_data1 <- bake(prepped_recipe, new_data = data_train)
-# 
-# log_reg <- logistic_reg(mixture = tune(), penalty = tune()) %>% #Type of model
-#   set_engine("glmnet")
-# 
-# pretune_workflow <- workflow() %>%
-#   add_recipe(my_recipe) %>%
-#   add_model(log_reg)
-# 
-# # Grid for CV
-# tuning_grid <- grid_regular(penalty(),
-#                             mixture(),
-#                             levels = 5) ## L^2 tuning possibilities
-# 
-# # Split data for CV
-# folds <- vfold_cv(data_train, v = 10, repeats = 1)
-# 
-# # Run CV
-# CV_results <- pretune_workflow %>%
-#   tune_grid(resamples = folds,
-#             grid = tuning_grid,
-#             metrics = metric_set(roc_auc))
-# 
-# bestTune <- CV_results %>%
-#   select_best('roc_auc')
-# 
-# final_wf <- pretune_workflow %>%
-#   finalize_workflow(bestTune) %>%
-#   fit(data = data_train)
-# 
-# data_test <- vroom("./data/test.csv") # grab testing data
-# 
-# amazon_predictions <- predict(final_wf,
-#                               new_data=data_test,
-#                               type="prob") %>% # "class" or "prob"
-#   mutate(Id = data_test$id) %>%
-#   mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-#   select(-.pred_0, -.pred_1)
-# 
-# vroom_write(amazon_predictions, "amazon_logreg_target.csv", delim = ",")
-# save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-# load('amazon_penalized_wf.RData')
+
+log_reg <- logistic_reg(mixture = tune(), penalty = tune()) %>% #Type of model
+  set_engine("glmnet")
+
+pretune_workflow <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(log_reg)
+
+# Grid for CV
+tuning_grid <- grid_regular(penalty(),
+                            mixture(),
+                            levels = 5) ## L^2 tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- pretune_workflow %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- pretune_workflow %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("./data/test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "./data/amazon_logreg_target2.csv", delim = ",")
+save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+load('amazon_penalized_wf.RData')
 
 
 
@@ -167,50 +165,50 @@ rFormula <- ACTION ~ .
 ##### Classification Random Forest #####
 ########################################
 
-# class_rf_mod <- rand_forest(mtry = tune(), 
-#                             min_n = tune(),
-#                             trees = 800) %>% #Type of model
-#   set_engine('ranger') %>%
-#   set_mode('classification')
-# 
-# pretune_workflow <- workflow() %>%
-#   add_recipe(my_recipe) %>%
-#   add_model(class_rf_mod)
-# 
-# ## Grid of values to tune over
-# tuning_grid <- grid_regular(mtry(range = c(1,ncol(data_train)-1)),
-#                             min_n(),
-#                             levels = 3) ## L^2 total tuning possibilities
-# 
-# # Split data for CV
-# folds <- vfold_cv(data_train, v = 10, repeats = 1)
-# 
-# # Run CV
-# CV_results <- pretune_workflow %>%
-#   tune_grid(resamples = folds,
-#             grid = tuning_grid,
-#             metrics = metric_set(roc_auc))
-# 
-# bestTune <- CV_results %>%
-#   select_best('roc_auc')
-# 
-# final_wf <- pretune_workflow %>%
-#   finalize_workflow(bestTune) %>%
-#   fit(data = data_train)
-# 
-# data_test <- vroom("./data/test.csv") # grab testing data
-# 
-# amazon_predictions <- predict(final_wf,
-#                               new_data=data_test,
-#                               type="prob") %>% # "class" or "prob"
-#   mutate(Id = data_test$id) %>%
-#   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-#   mutate(ACTION = .pred_1) %>%
-#   select(-.pred_0, -.pred_1)
-# 
-# vroom_write(amazon_predictions, "amazon_pred_rf.csv", delim = ",")
-# save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-# load('amazon_penalized_wf.RData')
+class_rf_mod <- rand_forest(mtry = tune(),
+                            min_n = tune(),
+                            trees = 800) %>% #Type of model
+  set_engine('ranger') %>%
+  set_mode('classification')
+
+pretune_workflow <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(class_rf_mod)
+
+## Grid of values to tune over
+tuning_grid <- grid_regular(mtry(range = c(1,ncol(data_train)-1)),
+                            min_n(),
+                            levels = 3) ## L^2 total tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- pretune_workflow %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- pretune_workflow %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("./data/test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  mutate(ACTION = .pred_1) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "./data/amazon_pred_rf2.csv", delim = ",")
+save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+load('amazon_penalized_wf.RData')
 
 
 
@@ -218,53 +216,53 @@ rFormula <- ACTION ~ .
 ##### Naive Bayes Approach #####
 ################################
 
-# install.packages('discrim')
-# library(discrim)
-# install.packages('naivebayes')
-# library(naivebayes)
-# 
-# # nb model
-# nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
-#                         set_mode('classification') %>%
-#                         set_engine('naivebayes')
-# 
-# nb_wf <- workflow() %>%
-#   add_recipe(my_recipe) %>%
-#   add_model(nb_mod)
-# 
-# tuning_grid <- grid_regular(Laplace(),
-#                             smoothness(),
-#                             levels = 5) ## L^2 total tuning possibilities
-# 
-# # Split data for CV
-# folds <- vfold_cv(data_train, v = 10, repeats = 1)
-# 
-# # Run CV
-# CV_results <- nb_wf %>%
-#   tune_grid(resamples = folds,
-#             grid = tuning_grid,
-#             metrics = metric_set(roc_auc))
-# 
-# bestTune <- CV_results %>%
-#   select_best('roc_auc')
-# 
-# final_wf <- nb_wf %>%
-#   finalize_workflow(bestTune) %>%
-#   fit(data = data_train)
-# 
-# data_test <- vroom("./data/test.csv") # grab testing data
-# 
-# amazon_predictions <- predict(final_wf,
-#                               new_data=data_test,
-#                               type="prob") %>% # "class" or "prob"
-#   mutate(Id = data_test$id) %>%
-#   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-#   mutate(ACTION = .pred_1) %>%
-#   select(-.pred_0, -.pred_1)
-# 
-# vroom_write(amazon_predictions, "amazon_pred_nb.csv", delim = ",")
-# save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-# load('amazon_penalized_wf.RData')
+install.packages('discrim')
+library(discrim)
+install.packages('naivebayes')
+library(naivebayes)
+
+# nb model
+nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
+                        set_mode('classification') %>%
+                        set_engine('naivebayes')
+
+nb_wf <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(nb_mod)
+
+tuning_grid <- grid_regular(Laplace(),
+                            smoothness(),
+                            levels = 5) ## L^2 total tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- nb_wf %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- nb_wf %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("./data/test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  mutate(ACTION = .pred_1) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "./data/amazon_pred_nb2.csv", delim = ",")
+save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+load('amazon_penalized_wf.RData')
 
 
 
@@ -272,180 +270,195 @@ rFormula <- ACTION ~ .
 ##### K-Nearest Neighbors #####
 ###############################
 
-# install.packages('kknn')
-# library(kknn)
-# 
+install.packages('kknn')
+library(kknn)
+
 # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
 #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
 #   step_other(all_nominal_predictors(), threshold = .001) %>%
 #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
 #   step_normalize()
-# 
-# prepped_recipe <- prep(my_recipe) # preprocessing new data
-# baked_data1 <- bake(prepped_recipe, new_data = data_train)
-# 
-# ## knn model
-# knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
-#   set_mode("classification") %>%
-#   set_engine("kknn")
-# 
-# knn_wf <- workflow() %>%
-#   add_recipe(my_recipe) %>%
-#   add_model(knn_model)
-# 
-# ## Fit or Tune MOdel
-# tuning_grid <- grid_regular(neighbors(),
-#                             levels = 5) ## L^2 total tuning possibilities
-# 
-# # Split data for CV
-# folds <- vfold_cv(data_train, v = 10, repeats = 1)
-# 
-# # Run CV
-# CV_results <- knn_wf %>%
-#   tune_grid(resamples = folds,
-#             grid = tuning_grid,
-#             metrics = metric_set(roc_auc))
-# 
-# bestTune <- CV_results %>%
-#   select_best('roc_auc')
-# 
-# final_wf <- knn_wf %>%
-#   finalize_workflow(bestTune) %>%
-#   fit(data = data_train)
-# 
-# data_test <- vroom("./data/test.csv") # grab testing data
-# 
-# amazon_predictions <- predict(final_wf,
-#                               new_data=data_test,
-#                               type="prob") %>% # "class" or "prob"
-#   mutate(Id = data_test$id) %>%
-#   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-#   mutate(ACTION = .pred_1) %>%
-#   select(-.pred_0, -.pred_1)
-# 
-# vroom_write(amazon_predictions, "amazon_pred_knn.csv", delim = ",")
+
+my_recipe_k <- my_recipe %>%
+  step_normalize()
+
+prepped_recipe_k <- prep(my_recipe_k) # preprocessing new data
+baked_data_k <- bake(prepped_recipe_k, new_data = data_train)
+
+## knn model
+knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
+  set_mode("classification") %>%
+  set_engine("kknn")
+
+knn_wf <- workflow() %>%
+  add_recipe(my_recipe_k) %>%
+  add_model(knn_model)
+
+## Fit or Tune MOdel
+tuning_grid <- grid_regular(neighbors(),
+                            levels = 5) ## L^2 total tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- knn_wf %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- knn_wf %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("./data/test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  mutate(ACTION = .pred_1) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "./data/amazon_pred_knn.csv", delim = ",")
+save(file = 'amazon_knn_wf.RData', list = c('final_wf'))
+load('amazon_knn_wf.RData')
 
 
 ####################################################
 ##### Naive Bayes Principle Comp Dim Reduction #####
 ####################################################
 
-# install.packages('discrim')
-# library(discrim)
-# install.packages('naivebayes')
-# library(naivebayes)
-# 
+install.packages('discrim')
+library(discrim)
+install.packages('naivebayes')
+library(naivebayes)
+
 # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
 #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
 #   step_other(all_nominal_predictors(), threshold = .001) %>%
 #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))%>% # get hours
 #   step_normalize(all_predictors()) %>%
 #   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
-# 
-# prepped_recipe <- prep(my_recipe) # preprocessing new data
-# baked_data1 <- bake(prepped_recipe, new_data = data_train)
-# 
-# # nb model
-# nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
-#   set_mode('classification') %>%
-#   set_engine('naivebayes')
-# 
-# nb_wf <- workflow() %>%
-#   add_recipe(my_recipe) %>%
-#   add_model(nb_mod)
-# 
-# tuning_grid <- grid_regular(Laplace(),
-#                             smoothness(),
-#                             levels = 5) ## L^2 total tuning possibilities
-# 
-# # Split data for CV
-# folds <- vfold_cv(data_train, v = 10, repeats = 1)
-# 
-# # Run CV
-# CV_results <- nb_wf %>%
-#   tune_grid(resamples = folds,
-#             grid = tuning_grid,
-#             metrics = metric_set(roc_auc))
-# 
-# bestTune <- CV_results %>%
-#   select_best('roc_auc')
-# 
-# final_wf <- nb_wf %>%
-#   finalize_workflow(bestTune) %>%
-#   fit(data = data_train)
-# 
-# data_test <- vroom("./data/test.csv") # grab testing data
-# 
-# amazon_predictions <- predict(final_wf,
-#                               new_data=data_test,
-#                               type="prob") %>% # "class" or "prob"
-#   mutate(Id = data_test$id) %>%
-#   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-#   mutate(ACTION = .pred_1) %>%
-#   select(-.pred_0, -.pred_1)
-# 
-# vroom_write(amazon_predictions, "./data/amazon_nb_dim_red.csv", delim = ",")
-# save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-# load('amazon_penalized_wf.RData')
+
+my_recipe_nb <- my_recipe %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
+
+prepped_recipe_nb <- prep(my_recipe_nb) # preprocessing new data
+baked_data_nb <- bake(prepped_recipe_nb, new_data = data_train)
+
+# nb model
+nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
+  set_mode('classification') %>%
+  set_engine('naivebayes')
+
+nb_wf <- workflow() %>%
+  add_recipe(my_recipe_nb) %>%
+  add_model(nb_mod)
+
+tuning_grid <- grid_regular(Laplace(),
+                            smoothness(),
+                            levels = 5) ## L^2 total tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- nb_wf %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- nb_wf %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("./data/test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  mutate(ACTION = .pred_1) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "./data/amazon_nb_dim_red2.csv", delim = ",")
+save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+load('amazon_penalized_wf.RData')
 
 
 ##################################
 ##### KNN Comp Dim Reduction #####
 ##################################
 
-# install.packages('kknn')
-# library(kknn)
-# 
+install.packages('kknn')
+library(kknn)
+
 # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
 #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
 #   step_other(all_nominal_predictors(), threshold = .001) %>%
 #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
 #   step_normalize(all_predictors()) %>%
 #   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
-# 
-# prepped_recipe <- prep(my_recipe) # preprocessing new data
-# baked_data1 <- bake(prepped_recipe, new_data = data_train)
-# 
-# ## knn model
-# knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
-#   set_mode("classification") %>%
-#   set_engine("kknn")
-# 
-# knn_wf <- workflow() %>%
-#   add_recipe(my_recipe) %>%
-#   add_model(knn_model)
-# 
-# ## Fit or Tune Model
-# tuning_grid <- grid_regular(neighbors(),
-#                             levels = 5) ## L^2 total tuning possibilities
-# 
-# # Split data for CV
-# folds <- vfold_cv(data_train, v = 10, repeats = 1)
-# 
-# # Run CV
-# CV_results <- knn_wf %>%
-#   tune_grid(resamples = folds,
-#             grid = tuning_grid,
-#             metrics = metric_set(roc_auc))
-# 
-# bestTune <- CV_results %>%
-#   select_best('roc_auc')
-# 
-# final_wf <- knn_wf %>%
-#   finalize_workflow(bestTune) %>%
-#   fit(data = data_train)
-# 
-# data_test <- vroom("./data/test.csv") # grab testing data
-# 
-# amazon_predictions <- predict(final_wf,
-#                               new_data=data_test,
-#                               type="prob") %>% # "class" or "prob"
-#   mutate(Id = data_test$id) %>%
-#   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-#   mutate(ACTION = .pred_1) %>%
-#   select(-.pred_0, -.pred_1)
-# 
-# vroom_write(amazon_predictions, "./data/amazon_knn_dim_red.csv", delim = ",")
+
+my_recipe_knn_cdr <- my_recipe %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
+
+prepped_recipe_knn_cdr <- prep(my_recipe_knn_cdr) # preprocessing new data
+baked_data_knn_cdr <- bake(prepped_recipe_knn_cdr, new_data = data_train)
+
+## knn model
+knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
+  set_mode("classification") %>%
+  set_engine("kknn")
+
+knn_wf <- workflow() %>%
+  add_recipe(my_recipe_knn_cdr) %>%
+  add_model(knn_model)
+
+## Fit or Tune Model
+tuning_grid <- grid_regular(neighbors(),
+                            levels = 5) ## L^2 total tuning possibilities
+
+# Split data for CV
+folds <- vfold_cv(data_train, v = 10, repeats = 1)
+
+# Run CV
+CV_results <- knn_wf %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best('roc_auc')
+
+final_wf <- knn_wf %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = data_train)
+
+data_test <- vroom("./data/test.csv") # grab testing data
+
+amazon_predictions <- predict(final_wf,
+                              new_data=data_test,
+                              type="prob") %>% # "class" or "prob"
+  mutate(Id = data_test$id) %>%
+  #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+  mutate(ACTION = .pred_1) %>%
+  select(-.pred_0, -.pred_1)
+
+vroom_write(amazon_predictions, "./data/amazon_knn_dim_red.csv2", delim = ",")
+save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+load('amazon_penalized_wf.RData')
 
 
 ################
@@ -453,14 +466,17 @@ rFormula <- ACTION ~ .
 ################
 
 # target encoding
-my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
-    step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-    step_other(all_nominal_predictors(), threshold = .001) %>%
-    step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
-    step_normalize(all_predictors())
+# my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
+#     step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+#     step_other(all_nominal_predictors(), threshold = .001) %>%
+#     step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
+#     step_normalize(all_predictors())
 
-prepped_recipe <- prep(my_recipe) # preprocessing new data
-baked_data1 <- bake(prepped_recipe, new_data = data_train)
+my_recipe_svm <- my_recipe %>%
+  step_normalize(all_predictors())
+
+prepped_recipe_svm <- prep(my_recipe_svm) # preprocessing new data
+baked_data_svm <- bake(prepped_recipe_svm, new_data = data_train)
 
 ## SVM models
 svmPoly <- svm_poly(degree=tune(), cost=tune()) %>% # set or tune
@@ -476,7 +492,7 @@ svmLinear <- svm_linear(cost=tune()) %>% # set or tune
   set_engine("kernlab")
 
 svm_wf <- workflow() %>%
-  add_recipe(my_recipe) %>%
+  add_recipe(my_recipe_svm) %>%
   add_model(svmRadial)
 
 ## Fit or Tune Model
@@ -510,7 +526,7 @@ amazon_predictions <- predict(final_wf,
   mutate(ACTION = .pred_1) %>%
   select(-.pred_0, -.pred_1)
 
-vroom_write(amazon_predictions, "./data/amazon_svm_pred.csv", delim = ",")
+vroom_write(amazon_predictions, "./data/amazon_svm_pred2.csv", delim = ",")
 
 save(file = 'amazon_svm_wf.RData', list = c('final_wf'))
 load('amazon_svm_wf.RData')
