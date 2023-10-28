@@ -118,46 +118,48 @@ baked_data1 <- bake(prepped_recipe, new_data = data_train)
 # prepped_recipe <- prep(my_recipe) # preprocessing new data
 # baked_data1 <- bake(prepped_recipe, new_data = data_train)
 
-log_reg <- logistic_reg(mixture = tune(), penalty = tune()) %>% #Type of model
-  set_engine("glmnet")
+########## The following should be uncommented when ready to test ##############
 
-pretune_workflow <- workflow() %>%
-  add_recipe(my_recipe) %>%
-  add_model(log_reg)
-
-# Grid for CV
-tuning_grid <- grid_regular(penalty(),
-                            mixture(),
-                            levels = 5) ## L^2 tuning possibilities
-
-# Split data for CV
-folds <- vfold_cv(data_train, v = 10, repeats = 1)
-
-# Run CV
-CV_results <- pretune_workflow %>%
-  tune_grid(resamples = folds,
-            grid = tuning_grid,
-            metrics = metric_set(roc_auc))
-
-bestTune <- CV_results %>%
-  select_best('roc_auc')
-
-final_wf <- pretune_workflow %>%
-  finalize_workflow(bestTune) %>%
-  fit(data = data_train)
-
-data_test <- vroom("./data/test.csv") # grab testing data
-
-amazon_predictions <- predict(final_wf,
-                              new_data=data_test,
-                              type="prob") %>% # "class" or "prob"
-  mutate(Id = data_test$id) %>%
-  mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-  select(-.pred_0, -.pred_1)
-
-vroom_write(amazon_predictions, "./data/amazon_logreg_target2.csv", delim = ",")
-save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-load('amazon_penalized_wf.RData')
+# log_reg <- logistic_reg(mixture = tune(), penalty = tune()) %>% #Type of model
+#   set_engine("glmnet")
+# 
+# pretune_workflow <- workflow() %>%
+#   add_recipe(my_recipe) %>%
+#   add_model(log_reg)
+# 
+# # Grid for CV
+# tuning_grid <- grid_regular(penalty(),
+#                             mixture(),
+#                             levels = 5) ## L^2 tuning possibilities
+# 
+# # Split data for CV
+# folds <- vfold_cv(data_train, v = 10, repeats = 1)
+# 
+# # Run CV
+# CV_results <- pretune_workflow %>%
+#   tune_grid(resamples = folds,
+#             grid = tuning_grid,
+#             metrics = metric_set(roc_auc))
+# 
+# bestTune <- CV_results %>%
+#   select_best('roc_auc')
+# 
+# final_wf <- pretune_workflow %>%
+#   finalize_workflow(bestTune) %>%
+#   fit(data = data_train)
+# 
+# data_test <- vroom("./data/test.csv") # grab testing data
+# 
+# amazon_predictions <- predict(final_wf,
+#                               new_data=data_test,
+#                               type="prob") %>% # "class" or "prob"
+#   mutate(Id = data_test$id) %>%
+#   mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+#   select(-.pred_0, -.pred_1)
+# 
+# vroom_write(amazon_predictions, "./data/amazon_logreg_target2.csv", delim = ",")
+# save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+# load('amazon_penalized_wf.RData')
 
 
 
@@ -165,50 +167,52 @@ load('amazon_penalized_wf.RData')
 ##### Classification Random Forest #####
 ########################################
 
-class_rf_mod <- rand_forest(mtry = tune(),
-                            min_n = tune(),
-                            trees = 800) %>% #Type of model
-  set_engine('ranger') %>%
-  set_mode('classification')
+########## The following should be uncommented when ready to test ##############
 
-pretune_workflow <- workflow() %>%
-  add_recipe(my_recipe) %>%
-  add_model(class_rf_mod)
-
-## Grid of values to tune over
-tuning_grid <- grid_regular(mtry(range = c(1,ncol(data_train)-1)),
-                            min_n(),
-                            levels = 3) ## L^2 total tuning possibilities
-
-# Split data for CV
-folds <- vfold_cv(data_train, v = 10, repeats = 1)
-
-# Run CV
-CV_results <- pretune_workflow %>%
-  tune_grid(resamples = folds,
-            grid = tuning_grid,
-            metrics = metric_set(roc_auc))
-
-bestTune <- CV_results %>%
-  select_best('roc_auc')
-
-final_wf <- pretune_workflow %>%
-  finalize_workflow(bestTune) %>%
-  fit(data = data_train)
-
-data_test <- vroom("./data/test.csv") # grab testing data
-
-amazon_predictions <- predict(final_wf,
-                              new_data=data_test,
-                              type="prob") %>% # "class" or "prob"
-  mutate(Id = data_test$id) %>%
-  #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-  mutate(ACTION = .pred_1) %>%
-  select(-.pred_0, -.pred_1)
-
-vroom_write(amazon_predictions, "./data/amazon_pred_rf2.csv", delim = ",")
-save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-load('amazon_penalized_wf.RData')
+# class_rf_mod <- rand_forest(mtry = tune(),
+#                             min_n = tune(),
+#                             trees = 800) %>% #Type of model
+#   set_engine('ranger') %>%
+#   set_mode('classification')
+# 
+# pretune_workflow <- workflow() %>%
+#   add_recipe(my_recipe) %>%
+#   add_model(class_rf_mod)
+# 
+# ## Grid of values to tune over
+# tuning_grid <- grid_regular(mtry(range = c(1,ncol(data_train)-1)),
+#                             min_n(),
+#                             levels = 3) ## L^2 total tuning possibilities
+# 
+# # Split data for CV
+# folds <- vfold_cv(data_train, v = 10, repeats = 1)
+# 
+# # Run CV
+# CV_results <- pretune_workflow %>%
+#   tune_grid(resamples = folds,
+#             grid = tuning_grid,
+#             metrics = metric_set(roc_auc))
+# 
+# bestTune <- CV_results %>%
+#   select_best('roc_auc')
+# 
+# final_wf <- pretune_workflow %>%
+#   finalize_workflow(bestTune) %>%
+#   fit(data = data_train)
+# 
+# data_test <- vroom("./data/test.csv") # grab testing data
+# 
+# amazon_predictions <- predict(final_wf,
+#                               new_data=data_test,
+#                               type="prob") %>% # "class" or "prob"
+#   mutate(Id = data_test$id) %>%
+#   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+#   mutate(ACTION = .pred_1) %>%
+#   select(-.pred_0, -.pred_1)
+# 
+# vroom_write(amazon_predictions, "./data/amazon_pred_rf2.csv", delim = ",")
+# save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+# load('amazon_penalized_wf.RData')
 
 
 
