@@ -96,6 +96,7 @@ The following objects are masked from ‘package:readr’:
 > # library(dbarts)
 > #install.packages('embed')
 > library(embed)
+> library(themis)
 > 
 > # rm(list=ls()) use to erase environment
 > 
@@ -112,23 +113,7 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
 > 
 > 
-> data_train
-# A tibble: 32,769 × 10
-   ACTION RESOURCE MGR_ID ROLE_ROLLUP_1 ROLE_ROLLUP_2 ROLE_DEPTNAME ROLE_TITLE
-   <fct>     <dbl>  <dbl>         <dbl>         <dbl>         <dbl>      <dbl>
- 1 1         39353  85475        117961        118300        123472     117905
- 2 1         17183   1540        117961        118343        123125     118536
- 3 1         36724  14457        118219        118220        117884     117879
- 4 1         36135   5396        117961        118343        119993     118321
- 5 1         42680   5905        117929        117930        119569     119323
- 6 0         45333  14561        117951        117952        118008     118568
- 7 1         25993  17227        117961        118343        123476     118980
- 8 1         19666   4209        117961        117969        118910     126820
- 9 1         31246    783        117961        118413        120584     128230
-10 1         78766  56683        118079        118080        117878     117879
-# ℹ 32,759 more rows
-# ℹ 3 more variables: ROLE_FAMILY_DESC <dbl>, ROLE_FAMILY <dbl>,
-#   ROLE_CODE <dbl>
+> #data_train
 > 
 > 
 > ###############
@@ -164,15 +149,15 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > # prepped_recipe <- prep(my_recipe) # preprocessing new data
 > # baked_data1 <- bake(prepped_recipe, new_data = data_train)
 > 
-> ### For target encoding/Random Forests: ###
-> 
-> # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
-> #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-> #   step_other(all_nominal_predictors(), threshold = .001) %>%
-> #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))# get hours
-> # 
-> # prepped_recipe <- prep(my_recipe) # preprocessing new data
-> # baked_data1 <- bake(prepped_recipe, new_data = data_train)
+> ## For target encoding/Random Forests: ###
+> my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
++   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
++   #step_other(all_nominal_predictors(), threshold = .001) %>%
++   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
++   step_smote(all_outcomes(), neighbors = 5)
+>  
+> prepped_recipe <- prep(my_recipe) # preprocessing new data
+> baked_data1 <- bake(prepped_recipe, new_data = data_train)
 > 
 > # ncol(baked_data1)
 > 
@@ -207,57 +192,78 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > ##### Logistic Regression: target encoding #####
 > ################################################
 > 
-> # rFormula <- ACTION ~ .
-> # 
 > # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
 > #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
 > #   step_other(all_nominal_predictors(), threshold = .001) %>%
 > #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))# get hours
-> #   
-> # 
+> 
 > # prepped_recipe <- prep(my_recipe) # preprocessing new data
 > # baked_data1 <- bake(prepped_recipe, new_data = data_train)
-> # 
-> # log_reg <- logistic_reg(mixture = tune(), penalty = tune()) %>% #Type of model
-> #   set_engine("glmnet")
-> # 
-> # pretune_workflow <- workflow() %>%
-> #   add_recipe(my_recipe) %>%
-> #   add_model(log_reg)
-> # 
-> # # Grid for CV
-> # tuning_grid <- grid_regular(penalty(),
-> #                             mixture(),
-> #                             levels = 5) ## L^2 tuning possibilities
-> # 
-> # # Split data for CV
-> # folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> # 
-> # # Run CV
-> # CV_results <- pretune_workflow %>%
-> #   tune_grid(resamples = folds,
-> #             grid = tuning_grid,
-> #             metrics = metric_set(roc_auc))
-> # 
-> # bestTune <- CV_results %>%
-> #   select_best('roc_auc')
-> # 
-> # final_wf <- pretune_workflow %>%
-> #   finalize_workflow(bestTune) %>%
-> #   fit(data = data_train)
-> # 
-> # data_test <- vroom("./data/test.csv") # grab testing data
-> # 
-> # amazon_predictions <- predict(final_wf,
-> #                               new_data=data_test,
-> #                               type="prob") %>% # "class" or "prob"
-> #   mutate(Id = data_test$id) %>%
-> #   mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-> #   select(-.pred_0, -.pred_1)
-> # 
-> # vroom_write(amazon_predictions, "amazon_logreg_target.csv", delim = ",")
-> # save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-> # load('amazon_penalized_wf.RData')
+> 
+> log_reg <- logistic_reg(mixture = tune(), penalty = tune()) %>% #Type of model
++   set_engine("glmnet")
+> 
+> pretune_workflow <- workflow() %>%
++   add_recipe(my_recipe) %>%
++   add_model(log_reg)
+> 
+> # Grid for CV
+> tuning_grid <- grid_regular(penalty(),
++                             mixture(),
++                             levels = 5) ## L^2 tuning possibilities
+> 
+> # Split data for CV
+> folds <- vfold_cv(data_train, v = 10, repeats = 1)
+> 
+> # Run CV
+> CV_results <- pretune_workflow %>%
++   tune_grid(resamples = folds,
++             grid = tuning_grid,
++             metrics = metric_set(roc_auc))
+→ A | warning: Model failed to converge with max|grad| = 0.420077 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1
+→ B | warning: Model failed to converge with max|grad| = 0.419688 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?, Model failed to converge with max|grad| = 0.345167 (tol = 0.002, component 1)
+There were issues with some computations   A: x1There were issues with some computations   A: x1   B: x1
+→ C | warning: Model failed to converge with max|grad| = 0.421958 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?, Model failed to converge with max|grad| = 0.34423 (tol = 0.002, component 1)
+There were issues with some computations   A: x1   B: x1There were issues with some computations   A: x1   B: x1   C: x1
+→ D | warning: Model failed to converge with max|grad| = 0.346127 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1   B: x1   C: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1
+→ E | warning: Model failed to converge with max|grad| = 0.345409 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1   B: x1   C: x1   D: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1
+There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1
+
+> 
+> bestTune <- CV_results %>%
++   select_best('roc_auc')
+> 
+> final_wf <- pretune_workflow %>%
++   finalize_workflow(bestTune) %>%
++   fit(data = data_train)
+> 
+> data_test <- vroom("./data/test.csv") # grab testing data
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> amazon_predictions <- predict(final_wf,
++                               new_data=data_test,
++                               type="prob") %>% # "class" or "prob"
++   mutate(Id = data_test$id) %>%
++   mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
++   select(-.pred_0, -.pred_1)
+> 
+> vroom_write(amazon_predictions, "./data/amazon_logreg_target2.csv", delim = ",")
+> save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+> load('amazon_penalized_wf.RData')
 > 
 > 
 > 
@@ -265,328 +271,78 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > ##### Classification Random Forest #####
 > ########################################
 > 
-> # class_rf_mod <- rand_forest(mtry = tune(), 
-> #                             min_n = tune(),
-> #                             trees = 800) %>% #Type of model
-> #   set_engine('ranger') %>%
-> #   set_mode('classification')
-> # 
-> # pretune_workflow <- workflow() %>%
-> #   add_recipe(my_recipe) %>%
-> #   add_model(class_rf_mod)
-> # 
-> # ## Grid of values to tune over
-> # tuning_grid <- grid_regular(mtry(range = c(1,ncol(data_train)-1)),
-> #                             min_n(),
-> #                             levels = 3) ## L^2 total tuning possibilities
-> # 
-> # # Split data for CV
-> # folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> # 
-> # # Run CV
-> # CV_results <- pretune_workflow %>%
-> #   tune_grid(resamples = folds,
-> #             grid = tuning_grid,
-> #             metrics = metric_set(roc_auc))
-> # 
-> # bestTune <- CV_results %>%
-> #   select_best('roc_auc')
-> # 
-> # final_wf <- pretune_workflow %>%
-> #   finalize_workflow(bestTune) %>%
-> #   fit(data = data_train)
-> # 
-> # data_test <- vroom("./data/test.csv") # grab testing data
-> # 
-> # amazon_predictions <- predict(final_wf,
-> #                               new_data=data_test,
-> #                               type="prob") %>% # "class" or "prob"
-> #   mutate(Id = data_test$id) %>%
-> #   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-> #   mutate(ACTION = .pred_1) %>%
-> #   select(-.pred_0, -.pred_1)
-> # 
-> # vroom_write(amazon_predictions, "amazon_pred_rf.csv", delim = ",")
-> # save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-> # load('amazon_penalized_wf.RData')
+> class_rf_mod <- rand_forest(mtry = tune(),
++                             min_n = tune(),
++                             trees = 800) %>% #Type of model
++   set_engine('ranger') %>%
++   set_mode('classification')
 > 
-> 
-> 
-> ################################
-> ##### Naive Bayes Approach #####
-> ################################
-> 
-> # install.packages('discrim')
-> # library(discrim)
-> # install.packages('naivebayes')
-> # library(naivebayes)
-> # 
-> # # nb model
-> # nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
-> #                         set_mode('classification') %>%
-> #                         set_engine('naivebayes')
-> # 
-> # nb_wf <- workflow() %>%
-> #   add_recipe(my_recipe) %>%
-> #   add_model(nb_mod)
-> # 
-> # tuning_grid <- grid_regular(Laplace(),
-> #                             smoothness(),
-> #                             levels = 5) ## L^2 total tuning possibilities
-> # 
-> # # Split data for CV
-> # folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> # 
-> # # Run CV
-> # CV_results <- nb_wf %>%
-> #   tune_grid(resamples = folds,
-> #             grid = tuning_grid,
-> #             metrics = metric_set(roc_auc))
-> # 
-> # bestTune <- CV_results %>%
-> #   select_best('roc_auc')
-> # 
-> # final_wf <- nb_wf %>%
-> #   finalize_workflow(bestTune) %>%
-> #   fit(data = data_train)
-> # 
-> # data_test <- vroom("./data/test.csv") # grab testing data
-> # 
-> # amazon_predictions <- predict(final_wf,
-> #                               new_data=data_test,
-> #                               type="prob") %>% # "class" or "prob"
-> #   mutate(Id = data_test$id) %>%
-> #   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-> #   mutate(ACTION = .pred_1) %>%
-> #   select(-.pred_0, -.pred_1)
-> # 
-> # vroom_write(amazon_predictions, "amazon_pred_nb.csv", delim = ",")
-> # save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-> # load('amazon_penalized_wf.RData')
-> 
-> 
-> 
-> ###############################
-> ##### K-Nearest Neighbors #####
-> ###############################
-> 
-> # install.packages('kknn')
-> # library(kknn)
-> # 
-> # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
-> #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-> #   step_other(all_nominal_predictors(), threshold = .001) %>%
-> #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
-> #   step_normalize()
-> # 
-> # prepped_recipe <- prep(my_recipe) # preprocessing new data
-> # baked_data1 <- bake(prepped_recipe, new_data = data_train)
-> # 
-> # ## knn model
-> # knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
-> #   set_mode("classification") %>%
-> #   set_engine("kknn")
-> # 
-> # knn_wf <- workflow() %>%
-> #   add_recipe(my_recipe) %>%
-> #   add_model(knn_model)
-> # 
-> # ## Fit or Tune MOdel
-> # tuning_grid <- grid_regular(neighbors(),
-> #                             levels = 5) ## L^2 total tuning possibilities
-> # 
-> # # Split data for CV
-> # folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> # 
-> # # Run CV
-> # CV_results <- knn_wf %>%
-> #   tune_grid(resamples = folds,
-> #             grid = tuning_grid,
-> #             metrics = metric_set(roc_auc))
-> # 
-> # bestTune <- CV_results %>%
-> #   select_best('roc_auc')
-> # 
-> # final_wf <- knn_wf %>%
-> #   finalize_workflow(bestTune) %>%
-> #   fit(data = data_train)
-> # 
-> # data_test <- vroom("./data/test.csv") # grab testing data
-> # 
-> # amazon_predictions <- predict(final_wf,
-> #                               new_data=data_test,
-> #                               type="prob") %>% # "class" or "prob"
-> #   mutate(Id = data_test$id) %>%
-> #   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-> #   mutate(ACTION = .pred_1) %>%
-> #   select(-.pred_0, -.pred_1)
-> # 
-> # vroom_write(amazon_predictions, "amazon_pred_knn.csv", delim = ",")
-> 
-> 
-> ####################################################
-> ##### Naive Bayes Principle Comp Dim Reduction #####
-> ####################################################
-> 
-> # install.packages('discrim')
-> # library(discrim)
-> # install.packages('naivebayes')
-> # library(naivebayes)
-> # 
-> # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
-> #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-> #   step_other(all_nominal_predictors(), threshold = .001) %>%
-> #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))%>% # get hours
-> #   step_normalize(all_predictors()) %>%
-> #   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
-> # 
-> # prepped_recipe <- prep(my_recipe) # preprocessing new data
-> # baked_data1 <- bake(prepped_recipe, new_data = data_train)
-> # 
-> # # nb model
-> # nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
-> #   set_mode('classification') %>%
-> #   set_engine('naivebayes')
-> # 
-> # nb_wf <- workflow() %>%
-> #   add_recipe(my_recipe) %>%
-> #   add_model(nb_mod)
-> # 
-> # tuning_grid <- grid_regular(Laplace(),
-> #                             smoothness(),
-> #                             levels = 5) ## L^2 total tuning possibilities
-> # 
-> # # Split data for CV
-> # folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> # 
-> # # Run CV
-> # CV_results <- nb_wf %>%
-> #   tune_grid(resamples = folds,
-> #             grid = tuning_grid,
-> #             metrics = metric_set(roc_auc))
-> # 
-> # bestTune <- CV_results %>%
-> #   select_best('roc_auc')
-> # 
-> # final_wf <- nb_wf %>%
-> #   finalize_workflow(bestTune) %>%
-> #   fit(data = data_train)
-> # 
-> # data_test <- vroom("./data/test.csv") # grab testing data
-> # 
-> # amazon_predictions <- predict(final_wf,
-> #                               new_data=data_test,
-> #                               type="prob") %>% # "class" or "prob"
-> #   mutate(Id = data_test$id) %>%
-> #   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-> #   mutate(ACTION = .pred_1) %>%
-> #   select(-.pred_0, -.pred_1)
-> # 
-> # vroom_write(amazon_predictions, "./data/amazon_nb_dim_red.csv", delim = ",")
-> # save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-> # load('amazon_penalized_wf.RData')
-> 
-> 
-> ##################################
-> ##### KNN Comp Dim Reduction #####
-> ##################################
-> 
-> # install.packages('kknn')
-> # library(kknn)
-> # 
-> # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
-> #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-> #   step_other(all_nominal_predictors(), threshold = .001) %>%
-> #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
-> #   step_normalize(all_predictors()) %>%
-> #   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
-> # 
-> # prepped_recipe <- prep(my_recipe) # preprocessing new data
-> # baked_data1 <- bake(prepped_recipe, new_data = data_train)
-> # 
-> # ## knn model
-> # knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
-> #   set_mode("classification") %>%
-> #   set_engine("kknn")
-> # 
-> # knn_wf <- workflow() %>%
-> #   add_recipe(my_recipe) %>%
-> #   add_model(knn_model)
-> # 
-> # ## Fit or Tune Model
-> # tuning_grid <- grid_regular(neighbors(),
-> #                             levels = 5) ## L^2 total tuning possibilities
-> # 
-> # # Split data for CV
-> # folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> # 
-> # # Run CV
-> # CV_results <- knn_wf %>%
-> #   tune_grid(resamples = folds,
-> #             grid = tuning_grid,
-> #             metrics = metric_set(roc_auc))
-> # 
-> # bestTune <- CV_results %>%
-> #   select_best('roc_auc')
-> # 
-> # final_wf <- knn_wf %>%
-> #   finalize_workflow(bestTune) %>%
-> #   fit(data = data_train)
-> # 
-> # data_test <- vroom("./data/test.csv") # grab testing data
-> # 
-> # amazon_predictions <- predict(final_wf,
-> #                               new_data=data_test,
-> #                               type="prob") %>% # "class" or "prob"
-> #   mutate(Id = data_test$id) %>%
-> #   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-> #   mutate(ACTION = .pred_1) %>%
-> #   select(-.pred_0, -.pred_1)
-> # 
-> # vroom_write(amazon_predictions, "./data/amazon_knn_dim_red.csv", delim = ",")
-> 
-> 
-> ################
-> ##### SVMS #####
-> ################
-> 
-> # target encoding
-> my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
-+     step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-+     step_other(all_nominal_predictors(), threshold = .001) %>%
-+     step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
-+     step_normalize(all_predictors())
-> 
-> prepped_recipe <- prep(my_recipe) # preprocessing new data
-> baked_data1 <- bake(prepped_recipe, new_data = data_train)
-> 
-> ## SVM models
-> svmPoly <- svm_poly(degree=tune(), cost=tune()) %>% # set or tune
-+   set_mode("classification") %>%
-+   set_engine("kernlab")
-> 
-> svmRadial <- svm_rbf(rbf_sigma=tune(), cost=tune()) %>% # set or tune
-+   set_mode("classification") %>%
-+   set_engine("kernlab")
-> 
-> svmLinear <- svm_linear(cost=tune()) %>% # set or tune
-+   set_mode("classification") %>%
-+   set_engine("kernlab")
-> 
-> svm_wf <- workflow() %>%
+> pretune_workflow <- workflow() %>%
 +   add_recipe(my_recipe) %>%
-+   add_model(svmRadial)
++   add_model(class_rf_mod)
 > 
-> ## Fit or Tune Model
-> tuning_grid <- grid_regular(rbf_sigma(),
-+                             cost(),
-+                             levels = 2) ## L^2 total tuning possibilities
+> ## Grid of values to tune over
+> tuning_grid <- grid_regular(mtry(range = c(1,ncol(data_train)-1)),
++                             min_n(),
++                             levels = 3) ## L^2 total tuning possibilities
 > 
 > # Split data for CV
-> folds <- vfold_cv(data_train, v = 5, repeats = 1)
+> folds <- vfold_cv(data_train, v = 10, repeats = 1)
 > 
 > # Run CV
-> CV_results <- svm_wf %>%
+> CV_results <- pretune_workflow %>%
 +   tune_grid(resamples = folds,
 +             grid = tuning_grid,
 +             metrics = metric_set(roc_auc))
+→ A | warning: Model failed to converge with max|grad| = 0.343306 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1
+→ B | warning: Model failed to converge with max|grad| = 0.420359 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?, Model failed to converge with max|grad| = 0.344777 (tol = 0.002, component 1)
+There were issues with some computations   A: x1There were issues with some computations   A: x1   B: x1
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   > 
+> bestTune <- CV_results %>%
++   select_best('roc_auc')
+> 
+> final_wf <- svm_wf %>%
++   finalize_workflow(bestTune) %>%
++   fit(data = data_train)
+maximum number of iterations reached 0.02605159 -0.02526513> 
+> data_test <- vroom("./data/test.csv") # grab testing data
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> amazon_predictions <- predict(final_wf,
++                               new_data=data_test,
++                               type="prob") %>% # "class" or "prob"
++   mutate(Id = data_test$id) %>%
++   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
++   mutate(ACTION = .pred_1) %>%
++   select(-.pred_0, -.pred_1)
+> 
+> vroom_write(amazon_predictions, "./data/amazon_svm_pred.csv", delim = ",")
+> 
+> save(file = 'amazon_svm_wf.RData', list = c('final_wf'))
+> load('amazon_svm_wf.RData')
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> proc.time()
+    user   system  elapsed 
+3324.864  191.212 1229.252 
