@@ -328,7 +328,7 @@ amazon_predictions <- predict(final_wf,
   mutate(ACTION = .pred_1) %>%
   select(-.pred_0, -.pred_1)
 
-vroom_write(amazon_predictions, "./data/amazon_pred_knn.csv", delim = ",")
+vroom_write(amazon_predictions, "./data/amazon_pred_knn2.csv", delim = ",")
 save(file = 'amazon_knn_wf.RData', list = c('final_wf'))
 load('amazon_knn_wf.RData')
 
@@ -460,7 +460,7 @@ amazon_predictions <- predict(final_wf,
   mutate(ACTION = .pred_1) %>%
   select(-.pred_0, -.pred_1)
 
-vroom_write(amazon_predictions, "./data/amazon_knn_dim_red.csv2", delim = ",")
+vroom_write(amazon_predictions, "./data/amazon_knn_dim_red2.csv", delim = ",")
 save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
 load('amazon_penalized_wf.RData')
 
