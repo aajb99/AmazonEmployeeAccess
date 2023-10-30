@@ -47,7 +47,7 @@ Type 'q()' to quit R.
 ✖ dplyr::lag()      masks stats::lag()
 ✖ yardstick::spec() masks readr::spec()
 ✖ recipes::step()   masks stats::step()
-• Use tidymodels_prefer() to resolve common conflicts.
+• Search for functions across packages at https://www.tidymodels.org/find/
 > #install.packages('DataExplorer')
 > #install.packages("poissonreg")
 > # library(poissonreg)
@@ -200,7 +200,7 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > # prepped_recipe <- prep(my_recipe) # preprocessing new data
 > # baked_data1 <- bake(prepped_recipe, new_data = data_train)
 > 
-> ########## The following should be uncommented when ready to test ##############
+> ########## The following should be uncommented for SMOTE ##############
 > 
 > # log_reg <- logistic_reg(mixture = tune(), penalty = tune()) %>% #Type of model
 > #   set_engine("glmnet")
@@ -249,28 +249,111 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > ##### Classification Random Forest #####
 > ########################################
 > 
-> ########## The following should be uncommented when ready to test ##############
+> ########## The following should be uncommented for SMOTE ##############
 > 
-> # class_rf_mod <- rand_forest(mtry = tune(),
-> #                             min_n = tune(),
-> #                             trees = 800) %>% #Type of model
-> #   set_engine('ranger') %>%
-> #   set_mode('classification')
+> class_rf_mod <- rand_forest(mtry = tune(),
++                             min_n = tune(),
++                             trees = 800) %>% #Type of model
++   set_engine('ranger') %>%
++   set_mode('classification')
+> 
+> pretune_workflow <- workflow() %>%
++   add_recipe(my_recipe) %>%
++   add_model(class_rf_mod)
+> 
+> ## Grid of values to tune over
+> tuning_grid <- grid_regular(mtry(range = c(1,ncol(data_train)-1)),
++                             min_n(),
++                             levels = 3) ## L^2 total tuning possibilities
+> 
+> # Split data for CV
+> folds <- vfold_cv(data_train, v = 10, repeats = 1)
+> 
+> # Run CV
+> CV_results <- pretune_workflow %>%
++   tune_grid(resamples = folds,
++             grid = tuning_grid,
++             metrics = metric_set(roc_auc))
+→ A | warning: Model failed to converge with max|grad| = 0.419807 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?, Model failed to converge with max|grad| = 0.340466 (tol = 0.002, component 1)
+There were issues with some computations   A: x1
+→ B | warning: Model failed to converge with max|grad| = 0.344899 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1There were issues with some computations   A: x1   B: x1
+→ C | warning: Model failed to converge with max|grad| = 0.421749 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1   B: x1There were issues with some computations   A: x1   B: x1   C: x1
+→ D | warning: Model failed to converge with max|grad| = 0.421541 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1   B: x1   C: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1
+→ E | warning: Model failed to converge with max|grad| = 0.416482 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1   B: x1   C: x1   D: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1
+→ F | warning: Model failed to converge with max|grad| = 0.419356 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x…
+There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x…
+
+> 
+> bestTune <- CV_results %>%
++   select_best('roc_auc')
+> 
+> final_wf <- pretune_workflow %>%
++   finalize_workflow(bestTune) %>%
++   fit(data = data_train)
+> 
+> data_test <- vroom("./data/test.csv") # grab testing data
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> amazon_predictions <- predict(final_wf,
++                               new_data=data_test,
++                               type="prob") %>% # "class" or "prob"
++   mutate(Id = data_test$id) %>%
++   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
++   mutate(ACTION = .pred_1) %>%
++   select(-.pred_0, -.pred_1)
+> 
+> vroom_write(amazon_predictions, "./data/amazon_pred_rf2.csv", delim = ",")
+> save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+> load('amazon_penalized_wf.RData')
+> 
+> 
+> 
+> ################################
+> ##### Naive Bayes Approach #####
+> ################################
+> 
+> ########## The following should be uncommented for SMOTE ##############
+> 
+> # install.packages('discrim')
+> # library(discrim)
+> # install.packages('naivebayes')
+> # library(naivebayes)
 > # 
-> # pretune_workflow <- workflow() %>%
+> # # nb model
+> # nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
+> #                         set_mode('classification') %>%
+> #                         set_engine('naivebayes')
+> # 
+> # nb_wf <- workflow() %>%
 > #   add_recipe(my_recipe) %>%
-> #   add_model(class_rf_mod)
+> #   add_model(nb_mod)
 > # 
-> # ## Grid of values to tune over
-> # tuning_grid <- grid_regular(mtry(range = c(1,ncol(data_train)-1)),
-> #                             min_n(),
-> #                             levels = 3) ## L^2 total tuning possibilities
+> # tuning_grid <- grid_regular(Laplace(),
+> #                             smoothness(),
+> #                             levels = 5) ## L^2 total tuning possibilities
 > # 
 > # # Split data for CV
 > # folds <- vfold_cv(data_train, v = 10, repeats = 1)
 > # 
 > # # Run CV
-> # CV_results <- pretune_workflow %>%
+> # CV_results <- nb_wf %>%
 > #   tune_grid(resamples = folds,
 > #             grid = tuning_grid,
 > #             metrics = metric_set(roc_auc))
@@ -278,7 +361,7 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > # bestTune <- CV_results %>%
 > #   select_best('roc_auc')
 > # 
-> # final_wf <- pretune_workflow %>%
+> # final_wf <- nb_wf %>%
 > #   finalize_workflow(bestTune) %>%
 > #   fit(data = data_train)
 > # 
@@ -292,134 +375,9 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 > #   mutate(ACTION = .pred_1) %>%
 > #   select(-.pred_0, -.pred_1)
 > # 
-> # vroom_write(amazon_predictions, "./data/amazon_pred_rf2.csv", delim = ",")
+> # vroom_write(amazon_predictions, "./data/amazon_pred_nb2.csv", delim = ",")
 > # save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
 > # load('amazon_penalized_wf.RData')
-> 
-> 
-> 
-> ################################
-> ##### Naive Bayes Approach #####
-> ################################
-> 
-> install.packages('discrim')
-Installing package into ‘/home/abrown52/R/x86_64-pc-linux-gnu-library/4.3’
-(as ‘lib’ is unspecified)
-trying URL 'https://cloud.r-project.org/src/contrib/discrim_1.0.1.tar.gz'
-Content type 'application/x-gzip' length 99880 bytes (97 KB)
-==================================================
-downloaded 97 KB
-
-* installing *source* package ‘discrim’ ...
-** package ‘discrim’ successfully unpacked and MD5 sums checked
-** using staged installation
-** R
-** data
-*** moving datasets to lazyload DB
-** inst
-** byte-compile and prepare package for lazy loading
-** help
-*** installing help indices
-*** copying figures
-** building package indices
-** testing if installed package can be loaded from temporary location
-** testing if installed package can be loaded from final location
-** testing if installed package keeps a record of temporary installation path
-* DONE (discrim)
-
-The downloaded source packages are in
-	‘/tmp/Rtmp4Ilnbe/downloaded_packages’
-> library(discrim)
-
-Attaching package: ‘discrim’
-
-The following object is masked from ‘package:dials’:
-
-    smoothness
-
-> install.packages('naivebayes')
-Installing package into ‘/home/abrown52/R/x86_64-pc-linux-gnu-library/4.3’
-(as ‘lib’ is unspecified)
-trying URL 'https://cloud.r-project.org/src/contrib/naivebayes_0.9.7.tar.gz'
-Content type 'application/x-gzip' length 705994 bytes (689 KB)
-==================================================
-downloaded 689 KB
-
-* installing *source* package ‘naivebayes’ ...
-** package ‘naivebayes’ successfully unpacked and MD5 sums checked
-** using staged installation
-** R
-** inst
-** byte-compile and prepare package for lazy loading
-** help
-*** installing help indices
-*** copying figures
-** building package indices
-** installing vignettes
-** testing if installed package can be loaded from temporary location
-** testing if installed package can be loaded from final location
-** testing if installed package keeps a record of temporary installation path
-* DONE (naivebayes)
-
-The downloaded source packages are in
-	‘/tmp/Rtmp4Ilnbe/downloaded_packages’
-> library(naivebayes)
-naivebayes 0.9.7 loaded
-> 
-> # nb model
-> nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
-+                         set_mode('classification') %>%
-+                         set_engine('naivebayes')
-> 
-> nb_wf <- workflow() %>%
-+   add_recipe(my_recipe) %>%
-+   add_model(nb_mod)
-> 
-> tuning_grid <- grid_regular(Laplace(),
-+                             smoothness(),
-+                             levels = 5) ## L^2 total tuning possibilities
-> 
-> # Split data for CV
-> folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> 
-> # Run CV
-> CV_results <- nb_wf %>%
-+   tune_grid(resamples = folds,
-+             grid = tuning_grid,
-+             metrics = metric_set(roc_auc))
-→ A | warning: Model failed to converge with max|grad| = 0.418269 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1
-There were issues with some computations   A: x1
-
-> 
-> bestTune <- CV_results %>%
-+   select_best('roc_auc')
-> 
-> final_wf <- nb_wf %>%
-+   finalize_workflow(bestTune) %>%
-+   fit(data = data_train)
-> 
-> data_test <- vroom("./data/test.csv") # grab testing data
-Rows: 58921 Columns: 10
-── Column specification ────────────────────────────────────────────────────────
-Delimiter: ","
-dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-> 
-> amazon_predictions <- predict(final_wf,
-+                               new_data=data_test,
-+                               type="prob") %>% # "class" or "prob"
-+   mutate(Id = data_test$id) %>%
-+   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-+   mutate(ACTION = .pred_1) %>%
-+   select(-.pred_0, -.pred_1)
-> 
-> vroom_write(amazon_predictions, "./data/amazon_pred_nb2.csv", delim = ",")
-> save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-> load('amazon_penalized_wf.RData')
 > 
 > 
 > 
@@ -427,175 +385,75 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > ##### K-Nearest Neighbors #####
 > ###############################
 > 
-> install.packages('kknn')
-Installing package into ‘/home/abrown52/R/x86_64-pc-linux-gnu-library/4.3’
-(as ‘lib’ is unspecified)
-trying URL 'https://cloud.r-project.org/src/contrib/kknn_1.3.1.tar.gz'
-Content type 'application/x-gzip' length 388410 bytes (379 KB)
-==================================================
-downloaded 379 KB
-
-* installing *source* package ‘kknn’ ...
-** package ‘kknn’ successfully unpacked and MD5 sums checked
-** using staged installation
-** libs
-using C compiler: ‘gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0’
-gcc -I"/usr/share/R/include" -DNDEBUG       -fpic  -g -O2 -ffile-prefix-map=/build/r-base-MHXHhT/r-base-4.3.1=. -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2  -c dm.c -o dm.o
-gcc -shared -L/usr/lib/R/lib -Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -flto=auto -Wl,-z,relro -o kknn.so dm.o -L/usr/lib/R/lib -lR
-installing to /home/abrown52/R/x86_64-pc-linux-gnu-library/4.3/00LOCK-kknn/00new/kknn/libs
-** R
-** data
-** inst
-** byte-compile and prepare package for lazy loading
-** help
-*** installing help indices
-** building package indices
-** testing if installed package can be loaded from temporary location
-** checking absolute paths in shared objects and dynamic libraries
-** testing if installed package can be loaded from final location
-** testing if installed package keeps a record of temporary installation path
-* DONE (kknn)
-
-The downloaded source packages are in
-	‘/tmp/Rtmp4Ilnbe/downloaded_packages’
-> library(kknn)
+> ########## The following should be uncommented for SMOTE ##############
 > 
-> # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
-> #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-> #   step_other(all_nominal_predictors(), threshold = .001) %>%
-> #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
+> # install.packages('kknn')
+> # library(kknn)
+> # 
+> # # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
+> # #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+> # #   step_other(all_nominal_predictors(), threshold = .001) %>%
+> # #   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
+> # #   step_normalize()
+> # 
+> # my_recipe_k <- my_recipe %>%
 > #   step_normalize()
-> 
-> my_recipe_k <- my_recipe %>%
-+   step_normalize()
-> 
-> prepped_recipe_k <- prep(my_recipe_k) # preprocessing new data
-> baked_data_k <- bake(prepped_recipe_k, new_data = data_train)
-> 
-> ## knn model
-> knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
-+   set_mode("classification") %>%
-+   set_engine("kknn")
-> 
-> knn_wf <- workflow() %>%
-+   add_recipe(my_recipe_k) %>%
-+   add_model(knn_model)
-> 
-> ## Fit or Tune MOdel
-> tuning_grid <- grid_regular(neighbors(),
-+                             levels = 5) ## L^2 total tuning possibilities
-> 
-> # Split data for CV
-> folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> 
-> # Run CV
-> CV_results <- knn_wf %>%
-+   tune_grid(resamples = folds,
-+             grid = tuning_grid,
-+             metrics = metric_set(roc_auc))
-→ A | warning: Model failed to converge with max|grad| = 0.343729 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1
-→ B | warning: Model failed to converge with max|grad| = 0.423466 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?, Model failed to converge with max|grad| = 0.344311 (tol = 0.002, component 1)
-There were issues with some computations   A: x1There were issues with some computations   A: x1   B: x1
-→ C | warning: Model failed to converge with max|grad| = 0.34774 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1There were issues with some computations   A: x1   B: x1   C: x1
-→ D | warning: Model failed to converge with max|grad| = 0.342611 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1
-
-> 
-> bestTune <- CV_results %>%
-+   select_best('roc_auc')
-> 
-> final_wf <- knn_wf %>%
-+   finalize_workflow(bestTune) %>%
-+   fit(data = data_train)
-> 
-> data_test <- vroom("./data/test.csv") # grab testing data
-Rows: 58921 Columns: 10
-── Column specification ────────────────────────────────────────────────────────
-Delimiter: ","
-dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-> 
-> amazon_predictions <- predict(final_wf,
-+                               new_data=data_test,
-+                               type="prob") %>% # "class" or "prob"
-+   mutate(Id = data_test$id) %>%
-+   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-+   mutate(ACTION = .pred_1) %>%
-+   select(-.pred_0, -.pred_1)
-> 
-> vroom_write(amazon_predictions, "./data/amazon_pred_knn.csv", delim = ",")
-> save(file = 'amazon_knn_wf.RData', list = c('final_wf'))
-> load('amazon_knn_wf.RData')
+> # 
+> # prepped_recipe_k <- prep(my_recipe_k) # preprocessing new data
+> # baked_data_k <- bake(prepped_recipe_k, new_data = data_train)
+> # 
+> # ## knn model
+> # knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
+> #   set_mode("classification") %>%
+> #   set_engine("kknn")
+> # 
+> # knn_wf <- workflow() %>%
+> #   add_recipe(my_recipe_k) %>%
+> #   add_model(knn_model)
+> # 
+> # ## Fit or Tune MOdel
+> # tuning_grid <- grid_regular(neighbors(),
+> #                             levels = 5) ## L^2 total tuning possibilities
+> # 
+> # # Split data for CV
+> # folds <- vfold_cv(data_train, v = 10, repeats = 1)
+> # 
+> # # Run CV
+> # CV_results <- knn_wf %>%
+> #   tune_grid(resamples = folds,
+> #             grid = tuning_grid,
+> #             metrics = metric_set(roc_auc))
+> # 
+> # bestTune <- CV_results %>%
+> #   select_best('roc_auc')
+> # 
+> # final_wf <- knn_wf %>%
+> #   finalize_workflow(bestTune) %>%
+> #   fit(data = data_train)
+> # 
+> # data_test <- vroom("./data/test.csv") # grab testing data
+> # 
+> # amazon_predictions <- predict(final_wf,
+> #                               new_data=data_test,
+> #                               type="prob") %>% # "class" or "prob"
+> #   mutate(Id = data_test$id) %>%
+> #   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+> #   mutate(ACTION = .pred_1) %>%
+> #   select(-.pred_0, -.pred_1)
+> # 
+> # vroom_write(amazon_predictions, "./data/amazon_pred_knn2.csv", delim = ",")
+> # save(file = 'amazon_knn_wf.RData', list = c('final_wf'))
+> # load('amazon_knn_wf.RData')
 > 
 > 
 > ####################################################
 > ##### Naive Bayes Principle Comp Dim Reduction #####
 > ####################################################
 > 
-> install.packages('discrim')
-Installing package into ‘/home/abrown52/R/x86_64-pc-linux-gnu-library/4.3’
-(as ‘lib’ is unspecified)
-trying URL 'https://cloud.r-project.org/src/contrib/discrim_1.0.1.tar.gz'
-Content type 'application/x-gzip' length 99880 bytes (97 KB)
-==================================================
-downloaded 97 KB
-
-* installing *source* package ‘discrim’ ...
-** package ‘discrim’ successfully unpacked and MD5 sums checked
-** using staged installation
-** R
-** data
-*** moving datasets to lazyload DB
-** inst
-** byte-compile and prepare package for lazy loading
-** help
-*** installing help indices
-*** copying figures
-** building package indices
-** testing if installed package can be loaded from temporary location
-** testing if installed package can be loaded from final location
-** testing if installed package keeps a record of temporary installation path
-* DONE (discrim)
-
-The downloaded source packages are in
-	‘/tmp/Rtmp4Ilnbe/downloaded_packages’
-> library(discrim)
-> install.packages('naivebayes')
-Installing package into ‘/home/abrown52/R/x86_64-pc-linux-gnu-library/4.3’
-(as ‘lib’ is unspecified)
-trying URL 'https://cloud.r-project.org/src/contrib/naivebayes_0.9.7.tar.gz'
-Content type 'application/x-gzip' length 705994 bytes (689 KB)
-==================================================
-downloaded 689 KB
-
-* installing *source* package ‘naivebayes’ ...
-** package ‘naivebayes’ successfully unpacked and MD5 sums checked
-** using staged installation
-** R
-** inst
-** byte-compile and prepare package for lazy loading
-** help
-*** installing help indices
-*** copying figures
-** building package indices
-** installing vignettes
-** testing if installed package can be loaded from temporary location
-** testing if installed package can be loaded from final location
-** testing if installed package keeps a record of temporary installation path
-* DONE (naivebayes)
-
-The downloaded source packages are in
-	‘/tmp/Rtmp4Ilnbe/downloaded_packages’
-> library(naivebayes)
+> # install.packages('discrim')
+> # library(discrim)
+> # install.packages('naivebayes')
+> # library(naivebayes)
 > 
 > # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
 > #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
@@ -604,117 +462,65 @@ The downloaded source packages are in
 > #   step_normalize(all_predictors()) %>%
 > #   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
 > 
-> my_recipe_nb <- my_recipe %>%
-+   step_normalize(all_predictors()) %>%
-+   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
+> ########## The following should be uncommented for SMOTE ##############
 > 
-> prepped_recipe_nb <- prep(my_recipe_nb) # preprocessing new data
-> baked_data_nb <- bake(prepped_recipe_nb, new_data = data_train)
-> 
-> # nb model
-> nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
-+   set_mode('classification') %>%
-+   set_engine('naivebayes')
-> 
-> nb_wf <- workflow() %>%
-+   add_recipe(my_recipe_nb) %>%
-+   add_model(nb_mod)
-> 
-> tuning_grid <- grid_regular(Laplace(),
-+                             smoothness(),
-+                             levels = 5) ## L^2 total tuning possibilities
-> 
-> # Split data for CV
-> folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> 
-> # Run CV
-> CV_results <- nb_wf %>%
-+   tune_grid(resamples = folds,
-+             grid = tuning_grid,
-+             metrics = metric_set(roc_auc))
-→ A | warning: Model failed to converge with max|grad| = 0.343083 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1
-→ B | warning: Model failed to converge with max|grad| = 0.347631 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1There were issues with some computations   A: x1   B: x1
-→ C | warning: Model failed to converge with max|grad| = 0.41972 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1There were issues with some computations   A: x1   B: x1   C: x1
-→ D | warning: Model failed to converge with max|grad| = 0.345082 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1
-→ E | warning: Model failed to converge with max|grad| = 0.419988 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1
-
-> 
-> bestTune <- CV_results %>%
-+   select_best('roc_auc')
-> 
-> final_wf <- nb_wf %>%
-+   finalize_workflow(bestTune) %>%
-+   fit(data = data_train)
-> 
-> data_test <- vroom("./data/test.csv") # grab testing data
-Rows: 58921 Columns: 10
-── Column specification ────────────────────────────────────────────────────────
-Delimiter: ","
-dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-> 
-> amazon_predictions <- predict(final_wf,
-+                               new_data=data_test,
-+                               type="prob") %>% # "class" or "prob"
-+   mutate(Id = data_test$id) %>%
-+   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-+   mutate(ACTION = .pred_1) %>%
-+   select(-.pred_0, -.pred_1)
-> 
-> vroom_write(amazon_predictions, "./data/amazon_nb_dim_red2.csv", delim = ",")
-> save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-> load('amazon_penalized_wf.RData')
+> # my_recipe_nb <- my_recipe %>%
+> #   step_normalize(all_predictors()) %>%
+> #   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
+> # 
+> # prepped_recipe_nb <- prep(my_recipe_nb) # preprocessing new data
+> # baked_data_nb <- bake(prepped_recipe_nb, new_data = data_train)
+> # 
+> # # nb model
+> # nb_mod <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
+> #   set_mode('classification') %>%
+> #   set_engine('naivebayes')
+> # 
+> # nb_wf <- workflow() %>%
+> #   add_recipe(my_recipe_nb) %>%
+> #   add_model(nb_mod)
+> # 
+> # tuning_grid <- grid_regular(Laplace(),
+> #                             smoothness(),
+> #                             levels = 5) ## L^2 total tuning possibilities
+> # 
+> # # Split data for CV
+> # folds <- vfold_cv(data_train, v = 10, repeats = 1)
+> # 
+> # # Run CV
+> # CV_results <- nb_wf %>%
+> #   tune_grid(resamples = folds,
+> #             grid = tuning_grid,
+> #             metrics = metric_set(roc_auc))
+> # 
+> # bestTune <- CV_results %>%
+> #   select_best('roc_auc')
+> # 
+> # final_wf <- nb_wf %>%
+> #   finalize_workflow(bestTune) %>%
+> #   fit(data = data_train)
+> # 
+> # data_test <- vroom("./data/test.csv") # grab testing data
+> # 
+> # amazon_predictions <- predict(final_wf,
+> #                               new_data=data_test,
+> #                               type="prob") %>% # "class" or "prob"
+> #   mutate(Id = data_test$id) %>%
+> #   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+> #   mutate(ACTION = .pred_1) %>%
+> #   select(-.pred_0, -.pred_1)
+> # 
+> # vroom_write(amazon_predictions, "./data/amazon_nb_dim_red2.csv", delim = ",")
+> # save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+> # load('amazon_penalized_wf.RData')
 > 
 > 
 > ##################################
 > ##### KNN Comp Dim Reduction #####
 > ##################################
 > 
-> install.packages('kknn')
-Installing package into ‘/home/abrown52/R/x86_64-pc-linux-gnu-library/4.3’
-(as ‘lib’ is unspecified)
-trying URL 'https://cloud.r-project.org/src/contrib/kknn_1.3.1.tar.gz'
-Content type 'application/x-gzip' length 388410 bytes (379 KB)
-==================================================
-downloaded 379 KB
-
-* installing *source* package ‘kknn’ ...
-** package ‘kknn’ successfully unpacked and MD5 sums checked
-** using staged installation
-** libs
-using C compiler: ‘gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0’
-gcc -I"/usr/share/R/include" -DNDEBUG       -fpic  -g -O2 -ffile-prefix-map=/build/r-base-MHXHhT/r-base-4.3.1=. -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2  -c dm.c -o dm.o
-gcc -shared -L/usr/lib/R/lib -Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -flto=auto -Wl,-z,relro -o kknn.so dm.o -L/usr/lib/R/lib -lR
-installing to /home/abrown52/R/x86_64-pc-linux-gnu-library/4.3/00LOCK-kknn/00new/kknn/libs
-** R
-** data
-** inst
-** byte-compile and prepare package for lazy loading
-** help
-*** installing help indices
-** building package indices
-** testing if installed package can be loaded from temporary location
-** checking absolute paths in shared objects and dynamic libraries
-** testing if installed package can be loaded from final location
-** testing if installed package keeps a record of temporary installation path
-* DONE (kknn)
-
-The downloaded source packages are in
-	‘/tmp/Rtmp4Ilnbe/downloaded_packages’
-> library(kknn)
+> # install.packages('kknn')
+> # library(kknn)
 > 
 > # my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
 > #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
@@ -723,85 +529,57 @@ The downloaded source packages are in
 > #   step_normalize(all_predictors()) %>%
 > #   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
 > 
-> my_recipe_knn_cdr <- my_recipe %>%
-+   step_normalize(all_predictors()) %>%
-+   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
+> ########## The following should be uncommented for SMOTE ##############
 > 
-> prepped_recipe_knn_cdr <- prep(my_recipe_knn_cdr) # preprocessing new data
-> baked_data_knn_cdr <- bake(prepped_recipe_knn_cdr, new_data = data_train)
-> 
-> ## knn model
-> knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
-+   set_mode("classification") %>%
-+   set_engine("kknn")
-> 
-> knn_wf <- workflow() %>%
-+   add_recipe(my_recipe_knn_cdr) %>%
-+   add_model(knn_model)
-> 
-> ## Fit or Tune Model
-> tuning_grid <- grid_regular(neighbors(),
-+                             levels = 5) ## L^2 total tuning possibilities
-> 
-> # Split data for CV
-> folds <- vfold_cv(data_train, v = 10, repeats = 1)
-> 
-> # Run CV
-> CV_results <- knn_wf %>%
-+   tune_grid(resamples = folds,
-+             grid = tuning_grid,
-+             metrics = metric_set(roc_auc))
-→ A | warning: Model failed to converge with max|grad| = 0.34606 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1
-→ B | warning: Model failed to converge with max|grad| = 0.419739 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?, Model failed to converge with max|grad| = 0.343321 (tol = 0.002, component 1)
-There were issues with some computations   A: x1There were issues with some computations   A: x1   B: x1
-→ C | warning: Model failed to converge with max|grad| = 0.344227 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1There were issues with some computations   A: x1   B: x1   C: x1
-→ D | warning: Model failed to converge with max|grad| = 0.420348 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1
-→ E | warning: Model failed to converge with max|grad| = 0.419649 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1
-→ F | warning: Model failed to converge with max|grad| = 0.338881 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x…
-→ G | warning: Model failed to converge with max|grad| = 0.341358 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x…There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x…
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x…
-
-> 
-> bestTune <- CV_results %>%
-+   select_best('roc_auc')
-> 
-> final_wf <- knn_wf %>%
-+   finalize_workflow(bestTune) %>%
-+   fit(data = data_train)
-> 
-> data_test <- vroom("./data/test.csv") # grab testing data
-Rows: 58921 Columns: 10
-── Column specification ────────────────────────────────────────────────────────
-Delimiter: ","
-dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-> 
-> amazon_predictions <- predict(final_wf,
-+                               new_data=data_test,
-+                               type="prob") %>% # "class" or "prob"
-+   mutate(Id = data_test$id) %>%
-+   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-+   mutate(ACTION = .pred_1) %>%
-+   select(-.pred_0, -.pred_1)
-> 
-> vroom_write(amazon_predictions, "./data/amazon_knn_dim_red.csv2", delim = ",")
-> save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
-> load('amazon_penalized_wf.RData')
+> # my_recipe_knn_cdr <- my_recipe %>%
+> #   step_normalize(all_predictors()) %>%
+> #   step_pca(all_predictors(), threshold = 0.9) # Threshold between 0 and 1
+> # 
+> # prepped_recipe_knn_cdr <- prep(my_recipe_knn_cdr) # preprocessing new data
+> # baked_data_knn_cdr <- bake(prepped_recipe_knn_cdr, new_data = data_train)
+> # 
+> # ## knn model
+> # knn_model <- nearest_neighbor(neighbors=tune()) %>% # set or tune
+> #   set_mode("classification") %>%
+> #   set_engine("kknn")
+> # 
+> # knn_wf <- workflow() %>%
+> #   add_recipe(my_recipe_knn_cdr) %>%
+> #   add_model(knn_model)
+> # 
+> # ## Fit or Tune Model
+> # tuning_grid <- grid_regular(neighbors(),
+> #                             levels = 5) ## L^2 total tuning possibilities
+> # 
+> # # Split data for CV
+> # folds <- vfold_cv(data_train, v = 10, repeats = 1)
+> # 
+> # # Run CV
+> # CV_results <- knn_wf %>%
+> #   tune_grid(resamples = folds,
+> #             grid = tuning_grid,
+> #             metrics = metric_set(roc_auc))
+> # 
+> # bestTune <- CV_results %>%
+> #   select_best('roc_auc')
+> # 
+> # final_wf <- knn_wf %>%
+> #   finalize_workflow(bestTune) %>%
+> #   fit(data = data_train)
+> # 
+> # data_test <- vroom("./data/test.csv") # grab testing data
+> # 
+> # amazon_predictions <- predict(final_wf,
+> #                               new_data=data_test,
+> #                               type="prob") %>% # "class" or "prob"
+> #   mutate(Id = data_test$id) %>%
+> #   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+> #   mutate(ACTION = .pred_1) %>%
+> #   select(-.pred_0, -.pred_1)
+> # 
+> # vroom_write(amazon_predictions, "./data/amazon_knn_dim_red2.csv", delim = ",")
+> # save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
+> # load('amazon_penalized_wf.RData')
 > 
 > 
 > ################
@@ -815,76 +593,66 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > #     step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
 > #     step_normalize(all_predictors())
 > 
-> my_recipe_svm <- my_recipe %>%
-+   step_normalize(all_predictors())
+> ########## The following should be uncommented for SMOTE ##############
 > 
-> prepped_recipe_svm <- prep(my_recipe_svm) # preprocessing new data
-> baked_data_svm <- bake(prepped_recipe_svm, new_data = data_train)
-> 
-> ## SVM models
-> svmPoly <- svm_poly(degree=tune(), cost=tune()) %>% # set or tune
-+   set_mode("classification") %>%
-+   set_engine("kernlab")
-> 
-> svmRadial <- svm_rbf(rbf_sigma=tune(), cost=tune()) %>% # set or tune
-+   set_mode("classification") %>%
-+   set_engine("kernlab")
-> 
-> svmLinear <- svm_linear(cost=tune()) %>% # set or tune
-+   set_mode("classification") %>%
-+   set_engine("kernlab")
-> 
-> svm_wf <- workflow() %>%
-+   add_recipe(my_recipe_svm) %>%
-+   add_model(svmRadial)
-> 
-> ## Fit or Tune Model
-> tuning_grid <- grid_regular(rbf_sigma(),
-+                             cost(),
-+                             levels = 2) ## L^2 total tuning possibilities
-> 
-> # Split data for CV
-> folds <- vfold_cv(data_train, v = 5, repeats = 1)
-> 
-> # Run CV
-> CV_results <- svm_wf %>%
-+   tune_grid(resamples = folds,
-+             grid = tuning_grid,
-+             metrics = metric_set(roc_auc))
-→ A | warning: Model failed to converge with max|grad| = 0.397507 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1
-There were issues with some computations   A: x1
-
-> 
-> bestTune <- CV_results %>%
-+   select_best('roc_auc')
-> 
-> final_wf <- svm_wf %>%
-+   finalize_workflow(bestTune) %>%
-+   fit(data = data_train)
-> 
-> data_test <- vroom("./data/test.csv") # grab testing data
-Rows: 58921 Columns: 10
-── Column specification ────────────────────────────────────────────────────────
-Delimiter: ","
-dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-> 
-> amazon_predictions <- predict(final_wf,
-+                               new_data=data_test,
-+                               type="prob") %>% # "class" or "prob"
-+   mutate(Id = data_test$id) %>%
-+   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
-+   mutate(ACTION = .pred_1) %>%
-+   select(-.pred_0, -.pred_1)
-> 
-> vroom_write(amazon_predictions, "./data/amazon_svm_pred2.csv", delim = ",")
-> 
-> save(file = 'amazon_svm_wf.RData', list = c('final_wf'))
-> load('amazon_svm_wf.RData')
+> # my_recipe_svm <- my_recipe %>%
+> #   step_normalize(all_predictors())
+> # 
+> # prepped_recipe_svm <- prep(my_recipe_svm) # preprocessing new data
+> # baked_data_svm <- bake(prepped_recipe_svm, new_data = data_train)
+> # 
+> # ## SVM models
+> # svmPoly <- svm_poly(degree=tune(), cost=tune()) %>% # set or tune
+> #   set_mode("classification") %>%
+> #   set_engine("kernlab")
+> # 
+> # svmRadial <- svm_rbf(rbf_sigma=tune(), cost=tune()) %>% # set or tune
+> #   set_mode("classification") %>%
+> #   set_engine("kernlab")
+> # 
+> # svmLinear <- svm_linear(cost=tune()) %>% # set or tune
+> #   set_mode("classification") %>%
+> #   set_engine("kernlab")
+> # 
+> # svm_wf <- workflow() %>%
+> #   add_recipe(my_recipe_svm) %>%
+> #   add_model(svmRadial)
+> # 
+> # ## Fit or Tune Model
+> # tuning_grid <- grid_regular(rbf_sigma(),
+> #                             cost(),
+> #                             levels = 2) ## L^2 total tuning possibilities
+> # 
+> # # Split data for CV
+> # folds <- vfold_cv(data_train, v = 5, repeats = 1)
+> # 
+> # # Run CV
+> # CV_results <- svm_wf %>%
+> #   tune_grid(resamples = folds,
+> #             grid = tuning_grid,
+> #             metrics = metric_set(roc_auc))
+> # 
+> # bestTune <- CV_results %>%
+> #   select_best('roc_auc')
+> # 
+> # final_wf <- svm_wf %>%
+> #   finalize_workflow(bestTune) %>%
+> #   fit(data = data_train)
+> # 
+> # data_test <- vroom("./data/test.csv") # grab testing data
+> # 
+> # amazon_predictions <- predict(final_wf,
+> #                               new_data=data_test,
+> #                               type="prob") %>% # "class" or "prob"
+> #   mutate(Id = data_test$id) %>%
+> #   #mutate(ACTION = ifelse(.pred_1 > .95, 1, 0)) %>%
+> #   mutate(ACTION = .pred_1) %>%
+> #   select(-.pred_0, -.pred_1)
+> # 
+> # vroom_write(amazon_predictions, "./data/amazon_svm_pred2.csv", delim = ",")
+> # 
+> # save(file = 'amazon_svm_wf.RData', list = c('final_wf'))
+> # load('amazon_svm_wf.RData')
 > 
 > 
 > 
@@ -900,5 +668,5 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > 
 > 
 > proc.time()
-     user    system   elapsed 
-14684.650  3555.506  9577.484 
+    user   system  elapsed 
+8857.061   55.507 8510.944 
