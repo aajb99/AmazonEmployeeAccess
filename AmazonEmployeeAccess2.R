@@ -47,7 +47,9 @@ rFormula <- ACTION ~ .
 ## For target encoding/Random Forests: ###
 my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dataset
   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION))
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>%
+  #step_pca(all_predictors(), threshold = 0.8) #%>% # Threshold between 0 and 1, test run for classification rf
+  step_smote(all_outcomes(), neighbors = 5)
 
 prepped_recipe <- prep(my_recipe) # preprocessing new data
 baked_data1 <- bake(prepped_recipe, new_data = data_train)

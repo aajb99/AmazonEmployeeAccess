@@ -72,7 +72,7 @@ my_recipe <- recipe(rFormula, data = data_train) %>% # set model formula and dat
   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
   #step_other(all_nominal_predictors(), threshold = .001) %>%
   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
-  step_pca(all_predictors(), threshold = 0.8) %>% # Threshold between 0 and 1, test run for classification rf
+  #step_pca(all_predictors(), threshold = 0.8) %>% # Threshold between 0 and 1, test run for classification rf
   step_smote(all_outcomes(), neighbors = 5)
  
 prepped_recipe <- prep(my_recipe) # preprocessing new data
