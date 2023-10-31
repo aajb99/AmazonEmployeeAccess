@@ -47,7 +47,7 @@ Type 'q()' to quit R.
 ✖ dplyr::lag()      masks stats::lag()
 ✖ yardstick::spec() masks readr::spec()
 ✖ recipes::step()   masks stats::step()
-• Search for functions across packages at https://www.tidymodels.org/find/
+• Learn how to get started at https://www.tidymodels.org/start/
 > #install.packages('DataExplorer')
 > #install.packages("poissonreg")
 > # library(poissonreg)
@@ -154,6 +154,7 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 +   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
 +   #step_other(all_nominal_predictors(), threshold = .001) %>%
 +   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>% # get hours
++   step_pca(all_predictors(), threshold = 0.8) %>% # Threshold between 0 and 1, test run for classification rf
 +   step_smote(all_outcomes(), neighbors = 5)
 >  
 > prepped_recipe <- prep(my_recipe) # preprocessing new data
@@ -274,25 +275,81 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 +   tune_grid(resamples = folds,
 +             grid = tuning_grid,
 +             metrics = metric_set(roc_auc))
-→ A | warning: Model failed to converge with max|grad| = 0.419807 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?, Model failed to converge with max|grad| = 0.340466 (tol = 0.002, component 1)
+→ A | warning: 5 columns were requested but there were 1 predictors in the data. 1 will be used.
 There were issues with some computations   A: x1
-→ B | warning: Model failed to converge with max|grad| = 0.344899 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
+→ B | warning: 9 columns were requested but there were 1 predictors in the data. 1 will be used.
 There were issues with some computations   A: x1There were issues with some computations   A: x1   B: x1
-→ C | warning: Model failed to converge with max|grad| = 0.421749 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+There were issues with some computations   A: x2   B: x1
+There were issues with some computations   A: x2   B: x2
+There were issues with some computations   A: x3   B: x2
+There were issues with some computations   A: x3   B: x3
+→ C | warning: Model failed to converge with max|grad| = 0.424085 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?, Model failed to converge with max|grad| = 0.34853 (tol = 0.002, component 1)
+There were issues with some computations   A: x3   B: x3There were issues with some computations   A: x3   B: x3   C: x1
+There were issues with some computations   A: x4   B: x3   C: x1
+There were issues with some computations   A: x4   B: x4   C: x1
+There were issues with some computations   A: x5   B: x4   C: x1
+There were issues with some computations   A: x5   B: x5   C: x1
+There were issues with some computations   A: x6   B: x5   C: x1
+There were issues with some computations   A: x6   B: x6   C: x1
+There were issues with some computations   A: x7   B: x6   C: x1
+There were issues with some computations   A: x7   B: x7   C: x1
+There were issues with some computations   A: x8   B: x7   C: x1
+There were issues with some computations   A: x8   B: x8   C: x1
+There were issues with some computations   A: x9   B: x8   C: x1
+There were issues with some computations   A: x9   B: x9   C: x1
+→ D | warning: Model failed to converge with max|grad| = 0.422806 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
                 - Rescale variables?
-There were issues with some computations   A: x1   B: x1There were issues with some computations   A: x1   B: x1   C: x1
-→ D | warning: Model failed to converge with max|grad| = 0.421541 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+There were issues with some computations   A: x9   B: x9   C: x1There were issues with some computations   A: x9   B: x9   C: x1   D: x1
+There were issues with some computations   A: x10   B: x9   C: x1   D: x1
+There were issues with some computations   A: x10   B: x10   C: x1   D: x1
+There were issues with some computations   A: x11   B: x10   C: x1   D: x1
+There were issues with some computations   A: x11   B: x11   C: x1   D: x1
+There were issues with some computations   A: x12   B: x11   C: x1   D: x1
+There were issues with some computations   A: x12   B: x12   C: x1   D: x1
+→ E | warning: Model failed to converge with max|grad| = 0.418192 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?, Model failed to converge with max|grad| = 0.343712 (tol = 0.002, component 1)
+There were issues with some computations   A: x12   B: x12   C: x1   D: x1There were issues with some computations   A: x12   B: x12   C: x1   D: x1   E:…
+There were issues with some computations   A: x13   B: x12   C: x1   D: x1   E:…
+There were issues with some computations   A: x13   B: x13   C: x1   D: x1   E:…
+There were issues with some computations   A: x14   B: x13   C: x1   D: x1   E:…
+There were issues with some computations   A: x14   B: x14   C: x1   D: x1   E:…
+There were issues with some computations   A: x15   B: x14   C: x1   D: x1   E:…
+There were issues with some computations   A: x15   B: x15   C: x1   D: x1   E:…
+There were issues with some computations   A: x16   B: x15   C: x1   D: x1   E:…
+There were issues with some computations   A: x16   B: x16   C: x1   D: x1   E:…
+There were issues with some computations   A: x17   B: x16   C: x1   D: x1   E:…
+There were issues with some computations   A: x17   B: x17   C: x1   D: x1   E:…
+There were issues with some computations   A: x18   B: x17   C: x1   D: x1   E:…
+There were issues with some computations   A: x18   B: x18   C: x1   D: x1   E:…
+There were issues with some computations   A: x19   B: x18   C: x1   D: x1   E:…
+There were issues with some computations   A: x19   B: x19   C: x1   D: x1   E:…
+There were issues with some computations   A: x20   B: x19   C: x1   D: x1   E:…
+There were issues with some computations   A: x20   B: x20   C: x1   D: x1   E:…
+There were issues with some computations   A: x21   B: x20   C: x1   D: x1   E:…
+There were issues with some computations   A: x21   B: x21   C: x1   D: x1   E:…
+There were issues with some computations   A: x22   B: x21   C: x1   D: x1   E:…
+There were issues with some computations   A: x22   B: x22   C: x1   D: x1   E:…
+There were issues with some computations   A: x23   B: x22   C: x1   D: x1   E:…
+There were issues with some computations   A: x23   B: x23   C: x1   D: x1   E:…
+There were issues with some computations   A: x24   B: x23   C: x1   D: x1   E:…
+There were issues with some computations   A: x24   B: x24   C: x1   D: x1   E:…
+There were issues with some computations   A: x25   B: x24   C: x1   D: x1   E:…
+There were issues with some computations   A: x25   B: x25   C: x1   D: x1   E:…
+There were issues with some computations   A: x26   B: x25   C: x1   D: x1   E:…
+There were issues with some computations   A: x26   B: x26   C: x1   D: x1   E:…
+There were issues with some computations   A: x27   B: x26   C: x1   D: x1   E:…
+There were issues with some computations   A: x27   B: x27   C: x1   D: x1   E:…
+→ F | warning: Model failed to converge with max|grad| = 0.341185 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
                 - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1
-→ E | warning: Model failed to converge with max|grad| = 0.416482 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1
-→ F | warning: Model failed to converge with max|grad| = 0.419356 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
-                - Rescale variables?
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x…
-There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x…
+There were issues with some computations   A: x27   B: x27   C: x1   D: x1   E:…There were issues with some computations   A: x27   B: x27   C: x1   D: x1   E:…
+There were issues with some computations   A: x28   B: x27   C: x1   D: x1   E:…
+There were issues with some computations   A: x28   B: x28   C: x1   D: x1   E:…
+There were issues with some computations   A: x29   B: x28   C: x1   D: x1   E:…
+There were issues with some computations   A: x29   B: x29   C: x1   D: x1   E:…
+There were issues with some computations   A: x30   B: x29   C: x1   D: x1   E:…
+There were issues with some computations   A: x30   B: x30   C: x1   D: x1   E:…
+There were issues with some computations   A: x30   B: x30   C: x1   D: x1   E:…
 
 > 
 > bestTune <- CV_results %>%
@@ -301,6 +358,8 @@ There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x�
 > final_wf <- pretune_workflow %>%
 +   finalize_workflow(bestTune) %>%
 +   fit(data = data_train)
+Warning message:
+9 columns were requested but there were 1 predictors in the data. 1 will be used. 
 > 
 > data_test <- vroom("./data/test.csv") # grab testing data
 Rows: 58921 Columns: 10
@@ -319,7 +378,7 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 +   mutate(ACTION = .pred_1) %>%
 +   select(-.pred_0, -.pred_1)
 > 
-> vroom_write(amazon_predictions, "./data/amazon_pred_rf2.csv", delim = ",")
+> vroom_write(amazon_predictions, "./data/amazon_pred_rf3.csv", delim = ",")
 > save(file = 'amazon_penalized_wf.RData', list = c('final_wf'))
 > load('amazon_penalized_wf.RData')
 > 
@@ -668,5 +727,5 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > 
 > 
 > proc.time()
-    user   system  elapsed 
-8857.061   55.507 8510.944 
+     user    system   elapsed 
+ 9522.255   153.655 12410.110 
