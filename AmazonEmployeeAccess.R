@@ -38,19 +38,19 @@ data_train <- vroom("./data/train.csv") %>%
 ##### EDA #####
 ###############
 
-# library(ggplot2)
-# 
-# boxplot(data_train$ROLE_CODE ~ data_train$ACTION,
-#         col='steelblue',
-#         main='action by role code',
-#         xlab='Action',
-#         ylab='ROLE_CODE')
-# 
-# boxplot(data_train$ROLE_TITLE ~ data_train$ACTION,
-#         col='steelblue',
-#         main='action by role title',
-#         xlab='Action',
-#         ylab='ROLE_TITLE')
+library(ggplot2)
+
+boxplot(data_train$ROLE_CODE ~ data_train$ACTION,
+        col='steelblue',
+        main='action by role code',
+        xlab='Action',
+        ylab='ROLE_CODE')
+
+boxplot(data_train$ROLE_TITLE ~ data_train$ACTION,
+        col='steelblue',
+        main='action by role title',
+        xlab='Action',
+        ylab='ROLE_TITLE')
 
 
 #######################
